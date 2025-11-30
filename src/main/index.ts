@@ -61,11 +61,27 @@ app.whenReady().then(() => {
 
   // Register custom protocol for local files
   protocol.registerFileProtocol('media', (request, callback) => {
-    const url = request.url.replace('media://', '')
     try {
-      return callback(decodeURIComponent(url))
+      const url = request.url
+      // Handle legacy/direct paths if they don't match the new pattern
+      if (!url.includes('?path=')) {
+        let decoded = decodeURIComponent(url.replace('media://', ''))
+        // If it starts with a slash and looks like a Windows drive path (e.g. /C:/...), remove the leading slash
+        if (process.platform === 'win32' && /^\/[a-zA-Z]:/.test(decoded)) {
+          decoded = decoded.slice(1)
+        }
+        return callback(decoded)
+      }
+
+      // New robust approach: media://open?path=<encoded_path>
+      const urlObj = new URL(url)
+      const filePath = urlObj.searchParams.get('path')
+      
+      if (filePath) {
+        return callback(filePath)
+      }
     } catch (error) {
-      console.error(error)
+      console.error('Protocol error:', error)
     }
   })
 

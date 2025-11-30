@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { File, Image, Music, Video, Trash2, Eye, Check, Search, Filter as FilterIcon, ChevronLeft, ChevronRight, FolderOpen } from 'lucide-react'
+import { File, Image, Music, Video, Trash2, Eye, Check, Search, Filter as FilterIcon, ChevronLeft, ChevronRight, FolderOpen, FileText, Presentation } from 'lucide-react'
 import '../assets/results.css'
 
 interface ResultsProps {
@@ -119,9 +119,11 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
 
   const getIcon = (path: string) => {
     const ext = path.split('.').pop()?.toLowerCase()
-    if (['jpg', 'png', 'gif', 'webp'].includes(ext || '')) return <Image size={16} />
-    if (['mp3', 'wav', 'flac'].includes(ext || '')) return <Music size={16} />
-    if (['mp4', 'mkv', 'avi'].includes(ext || '')) return <Video size={16} />
+    if (['jpg', 'png', 'gif', 'webp', 'jpeg', 'bmp'].includes(ext || '')) return <Image size={16} />
+    if (['mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a'].includes(ext || '')) return <Music size={16} />
+    if (['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm'].includes(ext || '')) return <Video size={16} />
+    if (['pdf'].includes(ext || '')) return <FileText size={16} />
+    if (['ppt', 'pptx'].includes(ext || '')) return <Presentation size={16} />
     return <File size={16} />
   }
 
@@ -156,8 +158,15 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
             } else {
               newErrors.add(file.path)
             }
+          } else if (['mp3', 'wav', 'ogg', 'mp4', 'webm', 'pdf'].includes(ext || '')) {
+             // These can be loaded directly via media protocol or file protocol if supported
+             // We'll use the media protocol we saw in main/index.ts: protocol.registerFileProtocol('media', ...)
+             // So we can just set the src to media://<path>
+             // We use query params to avoid issues with path parsing
+             const mediaUrl = `media://open?path=${encodeURIComponent(file.path)}`
+             newSrcs.set(file.path, mediaUrl)
           } else {
-            // Not supported for preview
+            // Not supported for direct preview (like PPTX), we will handle in render
           }
         } catch (err) {
           console.error('Error loading preview:', err)
@@ -249,7 +258,14 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
           {duplicates.map((group, idx) => (
             <div key={idx} className="duplicate-group card glass">
               <div className="group-header">
-                <span className="hash-tag">Group #{page * limit + idx + 1}</span>
+                <span 
+                  className="hash-tag clickable" 
+                  onClick={() => setPreviewFiles(group)}
+                  title="Click to preview all files in this group"
+                  style={{ cursor: 'pointer', textDecoration: 'underline' }}
+                >
+                  Group #{page * limit + idx + 1}
+                </span>
                 <span className="size-tag">{(group[0].size / 1024 / 1024).toFixed(2)} MB</span>
               </div>
               {group.map((file: any) => (
@@ -330,16 +346,57 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
                       </button>
                     </div>
                     <div className="preview-image-container">
-                      {loadingPreviews.has(file.path) ? (
-                        <div className="no-preview"><p>Loading...</p></div>
-                      ) : previewSrcs.has(file.path) ? (
-                        <img src={previewSrcs.get(file.path)} alt="Preview" />
-                      ) : (
-                        <div className="no-preview">
-                          {getIcon(file.path)}
-                          <p>{previewErrors.has(file.path) ? 'Preview failed' : 'No preview'}</p>
-                        </div>
-                      )}
+                      {(() => {
+                        const ext = file.path.split('.').pop()?.toLowerCase()
+                        
+                        if (loadingPreviews.has(file.path)) {
+                          return <div className="no-preview"><p>Loading...</p></div>
+                        }
+
+                        const mediaUrl = `media://open?path=${encodeURIComponent(file.path)}`
+
+                        if (['mp3', 'wav', 'ogg'].includes(ext || '')) {
+                           return (
+                             <audio controls className="preview-media">
+                               <source src={mediaUrl} />
+                               Your browser does not support the audio element.
+                             </audio>
+                           )
+                        }
+
+                        if (['mp4', 'webm'].includes(ext || '')) {
+                            return (
+                              <video controls className="preview-media" style={{maxWidth: '100%', maxHeight: '100%'}}>
+                                <source src={mediaUrl} />
+                                Your browser does not support the video element.
+                              </video>
+                            )
+                        }
+
+                        if (['pdf'].includes(ext || '')) {
+                            return (
+                                <iframe 
+                                    src={mediaUrl} 
+                                    className="preview-media"
+                                    style={{width: '100%', height: '300px', border: 'none'}}
+                                />
+                            )
+                        }
+                        
+                        if (previewSrcs.has(file.path)) {
+                          return <img src={previewSrcs.get(file.path)} alt="Preview" />
+                        }
+                        
+                        return (
+                          <div className="no-preview">
+                            {getIcon(file.path)}
+                            <p>
+                              {previewErrors.has(file.path) ? 'Preview failed' : 
+                               ['pptx', 'ppt'].includes(ext || '') ? 'Preview not available for slides' : 'No preview'}
+                            </p>
+                          </div>
+                        )
+                      })()}
                     </div>
                     <div className="file-meta">
                       <p className="file-name" title={file.path.split('\\').pop()}>{file.path.split('\\').pop()}</p>

@@ -14,6 +14,7 @@ const DEFAULT_EXCLUSIONS = [
   '.git',
   'AppData',
   '$Recycle.Bin',
+  '$RECYCLE.BIN',
   'System Volume Information'
 ]
 
@@ -84,7 +85,7 @@ export async function scanFiles(options: ScanOptions, mainWindow: BrowserWindow)
         for (const dirent of dirents) {
             const path = join(dir, dirent.name)
             
-            if (options.ignoreSystem && DEFAULT_EXCLUSIONS.some(ex => path.includes(ex))) continue
+            if (options.ignoreSystem && DEFAULT_EXCLUSIONS.some(ex => path.toLowerCase().includes(ex.toLowerCase()))) continue
             
             if (dirent.isDirectory()) {
                 queue.push(path)
