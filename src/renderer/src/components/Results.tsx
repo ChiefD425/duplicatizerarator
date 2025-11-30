@@ -72,6 +72,37 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
     setSelectedIds([])
   }
 
+  const autoSelect = (criteria: 'newest' | 'oldest' | 'shortest') => {
+    const newSelected: number[] = []
+    
+    duplicates.forEach(group => {
+      let keepId = -1
+      
+      // Find the one to keep based on criteria
+      if (criteria === 'newest') {
+        // Keep the one with largest created_at/mtime (assuming created_at is date string)
+        // Note: DB returns created_at as string, but we might want mtime if available.
+        // For now using created_at as proxy or mtime if we had it.
+        // Let's assume we want to sort by ID if dates are equal (stable sort)
+        const sorted = [...group].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        keepId = sorted[0].id
+      } else if (criteria === 'oldest') {
+        const sorted = [...group].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+        keepId = sorted[0].id
+      } else if (criteria === 'shortest') {
+        const sorted = [...group].sort((a, b) => a.path.length - b.path.length)
+        keepId = sorted[0].id
+      }
+      
+      // Select all others
+      group.forEach((f: any) => {
+        if (f.id !== keepId) newSelected.push(f.id)
+      })
+    })
+    
+    setSelectedIds(newSelected)
+  }
+
   const getIcon = (path: string) => {
     const ext = path.split('.').pop()?.toLowerCase()
     if (['jpg', 'png', 'gif', 'webp'].includes(ext || '')) return <Image size={16} />
@@ -103,6 +134,11 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
             >
               <Trash2 size={16} /> Move
             </button>
+          </div>
+          <div className="selection-tools">
+            <button className="tool-btn" onClick={() => autoSelect('newest')}>Keep Newest</button>
+            <button className="tool-btn" onClick={() => autoSelect('oldest')}>Keep Oldest</button>
+            <button className="tool-btn" onClick={() => autoSelect('shortest')}>Keep Shortest Name</button>
           </div>
         </div>
 

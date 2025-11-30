@@ -1,7 +1,14 @@
 import { app, shell, BrowserWindow, ipcMain, protocol } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+// @ts-ignore
 import icon from '../../resources/icon.png?asset'
+import { initDatabase, getDuplicates } from './database'
+import { scanFiles, cancelScan } from './scanner'
+import { processDuplicates } from './processor'
+import { getDrives } from './utils'
+import { moveFiles, restoreFiles, getHistory } from './actions'
+import { logger } from './logger'
 
 function createWindow(): void {
   // Create the browser window.
@@ -80,12 +87,6 @@ app.on('window-all-closed', () => {
 })
 
 // IPC Handlers
-import { initDatabase, getDuplicates } from './database'
-import { scanFiles } from './scanner'
-import { processDuplicates } from './processor'
-import { getDrives } from './utils'
-import { moveFiles, restoreFiles, getHistory } from './actions'
-import { logger } from './logger'
 
 // Initialize DB
 initDatabase()
@@ -111,7 +112,6 @@ ipcMain.handle('start-scan', async (_event, options) => {
 })
 
 ipcMain.handle('cancel-scan', () => {
-  const { cancelScan } = require('./scanner')
   cancelScan()
   return { success: true }
 })

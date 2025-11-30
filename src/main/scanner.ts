@@ -1,8 +1,10 @@
 import { readdir, stat } from 'fs/promises'
 import { join, extname } from 'path'
-import { upsertFilesBatch, clearFiles, getAllFilesMap, deleteFiles } from './database'
+import { upsertFilesBatch, clearFiles, getAllFilesMap, deleteFiles, updateFileHash } from './database'
 import { BrowserWindow } from 'electron'
 import { logger } from './logger'
+import { FileEntry } from './fileEntry'
+import { Worker } from 'worker_threads'
 
 // Smart Exclusions
 const DEFAULT_EXCLUSIONS = [
@@ -59,154 +61,155 @@ export async function scanFiles(options: ScanOptions, mainWindow: BrowserWindow)
   }
 
   let scannedCount = 0
-  let newOrChangedCount = 0
-  
-  // Batching
-  let fileBatch: { path: string, size: number, mtime: number }[] = []
-  const BATCH_SIZE = 1000
   let lastReportTime = Date.now()
-
-  const flushBatch = () => {
-    if (fileBatch.length > 0) {
-      upsertFilesBatch(fileBatch)
-      newOrChangedCount += fileBatch.length
-      fileBatch = []
-    }
-  }
-
-  // Concurrency Control
-  const MAX_CONCURRENCY = 32 // Adjust based on system limits
-  let activeOperations = 0
+  
+  // 1. Discovery Phase (Fast)
+  const filesBySize = new Map<number, FileEntry[]>()
   const queue: string[] = [...options.paths]
   
-  // Promise to signal completion
-  let resolveScan: (value: boolean) => void
-  const scanPromise = new Promise<boolean>((resolve) => { resolveScan = resolve })
-
-  const processQueue = async () => {
-    while (queue.length > 0 || activeOperations > 0) {
-      if (shouldCancel) {
-        flushBatch()
-        resolveScan(false)
-        return
-      }
-
-      // If queue is empty but operations are active, wait a bit
-      if (queue.length === 0) {
-        await new Promise(r => setTimeout(r, 10))
-        continue
-      }
-
-      // If max concurrency reached, wait
-      if (activeOperations >= MAX_CONCURRENCY) {
-        await new Promise(r => setTimeout(r, 5))
-        continue
-      }
-
-      const dir = queue.shift()
-      if (!dir) continue
-
-      activeOperations++
-      
-      // Process directory in background (don't await here to allow parallelism)
-      processDirectory(dir).finally(() => {
-        activeOperations--
-      })
+  // Helper to report progress
+  const reportProgress = () => {
+    const now = Date.now()
+    if (now - lastReportTime > 200) {
+        mainWindow.webContents.send('scan-progress', { count: scannedCount })
+        lastReportTime = now
     }
-    
-    // Done
-    flushBatch()
-    resolveScan(true)
   }
 
-  const processDirectory = async (dir: string) => {
-    if (shouldCancel) return
-
+  while (queue.length > 0) {
+    if (shouldCancel) return false
+    const dir = queue.shift()!
+    
     try {
-      // CRITICAL OPTIMIZATION: withFileTypes: true avoids extra stat calls for directories
-      const dirents = await readdir(dir, { withFileTypes: true })
-      
-      for (const dirent of dirents) {
-        if (shouldCancel) return
-
-        const path = join(dir, dirent.name)
-
-        // Check Exclusions
-        if (options.ignoreSystem && DEFAULT_EXCLUSIONS.some(ex => path.includes(ex))) {
-          continue
-        }
-
-        if (dirent.isDirectory()) {
-          queue.push(path)
-        } else if (dirent.isFile()) {
-          const ext = extname(path).toLowerCase()
-          if (allowedExtensions.size === 0 || allowedExtensions.has(ext)) {
+        const dirents = await readdir(dir, { withFileTypes: true })
+        for (const dirent of dirents) {
+            const path = join(dir, dirent.name)
             
-            // Only stat if extension matches
-            try {
-              const stats = await stat(path)
-              
-              const existing = existingFiles.get(path)
-              const isUnchanged = existing && existing.size === stats.size && existing.mtime === stats.mtimeMs
-              
-              if (!isUnchanged) {
-                fileBatch.push({ path, size: stats.size, mtime: stats.mtimeMs })
-                if (fileBatch.length >= BATCH_SIZE) {
-                  flushBatch()
+            if (options.ignoreSystem && DEFAULT_EXCLUSIONS.some(ex => path.includes(ex))) continue
+            
+            if (dirent.isDirectory()) {
+                queue.push(path)
+            } else if (dirent.isFile()) {
+                const ext = extname(path).toLowerCase()
+                if (allowedExtensions.size === 0 || allowedExtensions.has(ext)) {
+                    try {
+                        const stats = await stat(path)
+                        const entry = new FileEntry(path, stats)
+                        
+                        if (!filesBySize.has(entry.size)) {
+                            filesBySize.set(entry.size, [])
+                        }
+                        filesBySize.get(entry.size)!.push(entry)
+                        
+                        scannedCount++
+                        reportProgress()
+                    } catch (e) { /* ignore */ }
                 }
-              }
-              
-              seenPaths.add(path)
-              scannedCount++
-              
-              // Report progress periodically (time-based to avoid UI spam)
-              const now = Date.now()
-              if (now - lastReportTime > 200) { // Every 200ms
-                 mainWindow.webContents.send('scan-progress', { count: scannedCount })
-                 lastReportTime = now
-              }
-            } catch (err) {
-              // Ignore stat errors (permission denied, etc)
             }
-          }
         }
-      }
-    } catch (err) {
-      // Ignore readdir errors (permission denied, etc)
-    }
+    } catch (e) { /* ignore */ }
   }
 
-  // Start the processor loop
-  // We wrap it in a try-catch to ensure we catch any top-level errors
-  try {
-    await processQueue()
-  } catch (err) {
-    logger.error('Scan error:', err)
+  // 2. Grouping & Hashing Phase
+  // Filter out unique sizes (cannot be duplicates)
+  const potentialDuplicates: FileEntry[] = []
+  for (const [size, entries] of filesBySize) {
+      if (entries.length > 1) {
+          potentialDuplicates.push(...entries)
+      }
   }
 
-  // Cleanup deleted files
-  if (!shouldCancel && !options.forceRefresh) {
-    const pathsToDelete: string[] = []
-    for (const [path] of existingFiles) {
-      if (!seenPaths.has(path)) {
-        if (options.paths.some(root => path.startsWith(root))) {
-          pathsToDelete.push(path)
-        }
-      }
-    }
-    
-    if (pathsToDelete.length > 0) {
-      logger.info(`Removing ${pathsToDelete.length} deleted files from index...`)
-      deleteFiles(pathsToDelete)
-    }
-  }
+  logger.info(`Found ${scannedCount} files. ${potentialDuplicates.length} are potential duplicates (by size).`)
+
+  // 3. Parallel Hashing
+  // We can use a simple worker pool or just Promise.all with concurrency limit for now since we are IO bound mostly
+  // But for hashing CPU is also a factor.
+  // Since we are in Electron main process, we can use standard async/await with concurrency limit.
   
+  const CONCURRENCY = 4; // Adjust based on CPU cores
+  const chunks = [];
+  for (let i = 0; i < potentialDuplicates.length; i += CONCURRENCY) {
+      chunks.push(potentialDuplicates.slice(i, i + CONCURRENCY));
+  }
+
+  for (const chunk of chunks) {
+      if (shouldCancel) return false;
+      await Promise.all(chunk.map(async (entry) => {
+          try {
+              // Get partial hash first
+              const partialHash = await entry.getPartialHash();
+              // Save partial hash immediately (optional, but good for resume)
+              updateFileHash(entry.path, partialHash, null);
+          } catch (e) {
+              logger.error(`Error hashing ${entry.path}:`, e);
+          }
+      }));
+      reportProgress(); // Update UI that we are working
+  }
+
+  // 4. Final Grouping by Hash (Partial then Full)
+  // This logic is complex, usually we'd do it in steps.
+  // For now, let's just ensure we have full hashes for those that match partial hashes.
+  
+  const byPartialHash = new Map<string, FileEntry[]>();
+  for (const entry of potentialDuplicates) {
+      const hash = await entry.getPartialHash();
+      if (!byPartialHash.has(hash)) byPartialHash.set(hash, []);
+      byPartialHash.get(hash)!.push(entry);
+  }
+
+  const confirmedDuplicates: FileEntry[] = [];
+  for (const [hash, entries] of byPartialHash) {
+      if (entries.length > 1) {
+          // Collision on partial hash? Check full hash
+          // If size is small, partial hash IS full hash, so we are done.
+          // If size is large, we need full hash.
+          
+          // Optimization: If only 2 files and they are small, we are done.
+          // But let's be safe and compute full hash for all candidates.
+          
+          for (const entry of entries) {
+              const fullHash = await entry.getFullHash();
+              updateFileHash(entry.path, await entry.getPartialHash(), fullHash);
+          }
+          confirmedDuplicates.push(...entries);
+      }
+  }
+
+  // 5. Save to DB (only what we need, or everything?)
+  // The original code saved everything to DB.
+  // If we want to support "Fast Refresh", we should save everything.
+  // But for now, let's stick to the original behavior of saving scanned files.
+  
+  // We need to convert FileEntry back to the format expected by upsertFilesBatch
+  // And we should probably save the hashes too if the DB supports it.
+  // The current DB schema might need updates.
+  
+  // For this step, I will just save everything we scanned to maintain compatibility with existing "Results" view
+  // But ideally we should update the DB schema to store hashes.
+  
+  const batch = [];
+  for (const [size, entries] of filesBySize) {
+      for (const entry of entries) {
+          batch.push({
+              path: entry.path,
+              size: entry.size,
+              mtime: entry.mtime,
+              // We might want to add hash here if DB supports it
+          });
+          if (batch.length >= 1000) {
+              upsertFilesBatch(batch);
+              batch.length = 0;
+          }
+      }
+  }
+  if (batch.length > 0) upsertFilesBatch(batch);
+
   if (!shouldCancel) {
-    logger.info(`Scan finished. Total files: ${scannedCount}, New/Changed: ${newOrChangedCount}`)
+    logger.info(`Scan finished.`)
     mainWindow.webContents.send('scan-complete', { count: scannedCount })
     return true
   } else {
-    logger.warn('Scan cancelled by user')
     mainWindow.webContents.send('scan-cancelled')
     return false
   }

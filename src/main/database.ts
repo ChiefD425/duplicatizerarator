@@ -78,6 +78,15 @@ export function upsertFilesBatch(files: { path: string, size: number, mtime: num
   insertMany(files)
 }
 
+export function updateFileHash(path: string, partialHash: string | null, fullHash: string | null): void {
+  const stmt = db.prepare(`
+    UPDATE files 
+    SET partial_hash = ?, full_hash = ? 
+    WHERE path = ?
+  `)
+  stmt.run(partialHash, fullHash, path)
+}
+
 export function getAllFilesMap(): Map<string, { size: number, mtime: number }> {
   const files = db.prepare('SELECT path, size, mtime FROM files').all() as { path: string, size: number, mtime: number }[]
   const map = new Map<string, { size: number, mtime: number }>()

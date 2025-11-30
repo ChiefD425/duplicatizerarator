@@ -4,3 +4,7 @@ dist
 .DS_Store
 *.local
 .env
+
+# External reference projects
+*_reference
+*_reference/
