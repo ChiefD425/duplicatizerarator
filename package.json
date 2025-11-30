@@ -1,0 +1,53 @@
+{
+  "name": "duplicatizerarator",
+  "version": "1.0.0",
+  "description": "A modern duplicate file finder with a wow-factor UI.",
+  "main": "./out/main/index.js",
+  "author": "Fred Deichler",
+  "homepage": "https://github.com/freddeichler/duplicatizerarator",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "postinstall": "electron-builder install-app-deps",
+    "build:win": "npm run build && electron-builder --win --x64",
+    "start": "electron-vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@electron-toolkit/preload": "^3.0.0",
+    "@electron-toolkit/utils": "^3.0.0",
+    "better-sqlite3": "^12.5.0",
+    "clsx": "^2.1.0",
+    "framer-motion": "^11.0.8",
+    "lucide-react": "^0.344.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^18.19.0",
+    "@types/react": "^18.2.64",
+    "@types/react-dom": "^18.2.21",
+    "@vitejs/plugin-react": "^4.2.1",
+    "electron": "^29.1.0",
+    "electron-builder": "^24.13.3",
+    "electron-vite": "^2.1.0",
+    "typescript": "^5.4.2",
+    "vite": "^5.1.5"
+  },
+  "build": {
+    "appId": "com.duplicatizerarator.app",
+    "productName": "Duplicatizerarator",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "portable",
+      "icon": "resources/icon.png"
+    },
+    "files": [
+      "out/**/*",
+      "!**/*.map"
+    ]
+  }
+}
