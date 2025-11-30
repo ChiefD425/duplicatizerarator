@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { File, Image, Music, Video, Trash2, Eye, Check, Search, Filter as FilterIcon, ChevronLeft, ChevronRight } from 'lucide-react'
+import { File, Image, Music, Video, Trash2, Eye, Check, Search, Filter as FilterIcon, ChevronLeft, ChevronRight, FolderOpen } from 'lucide-react'
 import '../assets/results.css'
 
 interface ResultsProps {
@@ -72,6 +72,10 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
     setSelectedIds([])
   }
 
+  const handleShowInFolder = async (path: string) => {
+    await window.api.showItemInFolder(path)
+  }
+
   const autoSelect = (criteria: 'newest' | 'oldest' | 'shortest') => {
     const newSelected: number[] = []
     
@@ -113,7 +117,8 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
 
   const getPreviewSrc = (path: string) => {
     // Use custom protocol for local files
-    return `media://${path}`
+    // Encode the path to handle special characters like #, ?, %
+    return `media://${encodeURIComponent(path)}`
   }
 
   return (
@@ -198,6 +203,11 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
                   key={file.id} 
                   className={`file-row ${selectedIds.includes(file.id) ? 'selected' : ''}`}
                   onClick={() => toggleSelect(file.id)}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    handleShowInFolder(file.path)
+                  }}
+                  title="Right-click to show in folder"
                 >
                   <div className="checkbox">
                     {selectedIds.includes(file.id) && <Check size={12} />}
@@ -256,6 +266,14 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
                   <p><strong>Path:</strong> {previewFile.path}</p>
                   <p><strong>Size:</strong> {(previewFile.size / 1024 / 1024).toFixed(2)} MB</p>
                   <p><strong>Created:</strong> {new Date(previewFile.created_at).toLocaleString()}</p>
+                </div>
+                <div className="preview-actions">
+                  <button 
+                    className="action-btn"
+                    onClick={() => handleShowInFolder(previewFile.path)}
+                  >
+                    <FolderOpen size={16} /> Show in Explorer
+                  </button>
                 </div>
               </div>
             </motion.div>

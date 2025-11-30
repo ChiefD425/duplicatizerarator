@@ -8,6 +8,7 @@ interface Window {
     moveFiles: (fileIds: number[]) => Promise<any>
     getHistory: () => Promise<any[]>
     restoreFiles: (historyIds: number[]) => Promise<any>
+    showItemInFolder: (path: string) => Promise<any>
     cancelScan: () => Promise<{ success: boolean }>
     onScanProgress: (callback: (event: any, value: any) => void) => void
     onScanComplete: (callback: (event: any, value: any) => void) => void
