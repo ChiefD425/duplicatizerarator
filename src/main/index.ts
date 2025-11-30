@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, protocol } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -16,6 +16,8 @@ function createWindow(): void {
       sandbox: false
     }
   })
+
+  logger.setWindow(mainWindow)
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
@@ -49,6 +51,16 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
+  // Register custom protocol for local files
+  protocol.registerFileProtocol('media', (request, callback) => {
+    const url = request.url.replace('media://', '')
+    try {
+      return callback(decodeURIComponent(url))
+    } catch (error) {
+      console.error(error)
+    }
+  })
+
   createWindow()
 
   app.on('activate', function () {
@@ -67,5 +79,59 @@ app.on('window-all-closed', () => {
   }
 })
 
-// IPC test
+// IPC Handlers
+import { initDatabase, getDuplicates } from './database'
+import { scanFiles } from './scanner'
+import { processDuplicates } from './processor'
+import { getDrives } from './utils'
+import { moveFiles, restoreFiles, getHistory } from './actions'
+import { logger } from './logger'
+
+// Initialize DB
+initDatabase()
+
+ipcMain.handle('get-drives', async () => {
+  return await getDrives()
+})
+
+ipcMain.handle('start-scan', async (_event, options) => {
+  const mainWindow = BrowserWindow.getAllWindows()[0]
+  if (mainWindow) {
+    // Run in background
+    scanFiles(options, mainWindow).then((completed) => {
+      if (completed) {
+        logger.info('Scan completed, starting processing...')
+        processDuplicates(mainWindow)
+      } else {
+        logger.info('Scan cancelled, skipping processing')
+      }
+    })
+  }
+  return { success: true }
+})
+
+ipcMain.handle('cancel-scan', () => {
+  const { cancelScan } = require('./scanner')
+  cancelScan()
+  return { success: true }
+})
+
+ipcMain.handle('get-duplicates', (_event, options) => {
+  return getDuplicates(options)
+})
+
+ipcMain.handle('move-files', async (_event, fileIds) => {
+  await moveFiles(fileIds)
+  return { success: true }
+})
+
+ipcMain.handle('get-history', () => {
+  return getHistory()
+})
+
+ipcMain.handle('restore-files', async (_event, historyIds) => {
+  await restoreFiles(historyIds)
+  return { success: true }
+})
+
 ipcMain.on('ping', () => console.log('pong'))

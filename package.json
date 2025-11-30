@@ -5,6 +5,7 @@
   "main": "./out/main/index.js",
   "author": "Fred Deichler",
   "homepage": "https://github.com/freddeichler/duplicatizerarator",
+  "license": "GPL-3.0",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
