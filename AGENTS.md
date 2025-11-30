@@ -37,3 +37,6 @@ Duplicatizerarator is a modern, high-performance duplicate file finder for Windo
 ## Common Issues / Notes
 - **Windowing**: The app uses a custom title bar (frameless window). Ensure layout handles this.
 - **Permissions**: File system access is handled in the Main process. Use IPC to request file operations from the Renderer.
+
+## Documentation & Attribution
+- **Open Source Attribution**: If you add an open-source project to the directory for reference (e.g., `*_reference` folders), you MUST add it to the `Acknowledgements` section in `README.md`.

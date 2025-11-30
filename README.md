@@ -53,3 +53,5 @@ GNU GPL v3
 ## Acknowledgements
 
 - **[WinDirStat](https://github.com/windirstat/windirstat)**: Inspiration for the high-performance scanning algorithms and efficient file traversal strategies.
+- **[Czkawka](https://github.com/qarmin/czkawka)**: Reference for fast duplicate detection algorithms and efficient hashing strategies.
+- **[dupeGuru](https://github.com/arsenetar/dupeguru)**: Reference for fuzzy matching and cross-platform architecture concepts.
