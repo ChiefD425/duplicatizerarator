@@ -1,10 +1,9 @@
 import { readdir, stat } from 'fs/promises'
 import { join, extname } from 'path'
-import { upsertFilesBatch, clearFiles, getAllFilesMap, deleteFiles, updateFileHash } from './database'
+import { upsertFilesBatch, clearFiles, getAllFilesMap, deleteFiles } from './database'
 import { BrowserWindow } from 'electron'
 import { logger } from './logger'
 import { FileEntry } from './fileEntry'
-import { Worker } from 'worker_threads'
 
 // Smart Exclusions
 const DEFAULT_EXCLUSIONS = [
@@ -121,72 +120,8 @@ export async function scanFiles(options: ScanOptions, mainWindow: BrowserWindow)
 
   logger.info(`Found ${scannedCount} files. ${potentialDuplicates.length} are potential duplicates (by size).`)
 
-  // 3. Parallel Hashing
-  // We can use a simple worker pool or just Promise.all with concurrency limit for now since we are IO bound mostly
-  // But for hashing CPU is also a factor.
-  // Since we are in Electron main process, we can use standard async/await with concurrency limit.
-  
-  const CONCURRENCY = 4; // Adjust based on CPU cores
-  const chunks = [];
-  for (let i = 0; i < potentialDuplicates.length; i += CONCURRENCY) {
-      chunks.push(potentialDuplicates.slice(i, i + CONCURRENCY));
-  }
-
-  for (const chunk of chunks) {
-      if (shouldCancel) return false;
-      await Promise.all(chunk.map(async (entry) => {
-          try {
-              // Get partial hash first
-              const partialHash = await entry.getPartialHash();
-              // Save partial hash immediately (optional, but good for resume)
-              updateFileHash(entry.path, partialHash, null);
-          } catch (e) {
-              logger.error(`Error hashing ${entry.path}:`, e);
-          }
-      }));
-      reportProgress(); // Update UI that we are working
-  }
-
-  // 4. Final Grouping by Hash (Partial then Full)
-  // This logic is complex, usually we'd do it in steps.
-  // For now, let's just ensure we have full hashes for those that match partial hashes.
-  
-  const byPartialHash = new Map<string, FileEntry[]>();
-  for (const entry of potentialDuplicates) {
-      const hash = await entry.getPartialHash();
-      if (!byPartialHash.has(hash)) byPartialHash.set(hash, []);
-      byPartialHash.get(hash)!.push(entry);
-  }
-
-  const confirmedDuplicates: FileEntry[] = [];
-  for (const [hash, entries] of byPartialHash) {
-      if (entries.length > 1) {
-          // Collision on partial hash? Check full hash
-          // If size is small, partial hash IS full hash, so we are done.
-          // If size is large, we need full hash.
-          
-          // Optimization: If only 2 files and they are small, we are done.
-          // But let's be safe and compute full hash for all candidates.
-          
-          for (const entry of entries) {
-              const fullHash = await entry.getFullHash();
-              updateFileHash(entry.path, await entry.getPartialHash(), fullHash);
-          }
-          confirmedDuplicates.push(...entries);
-      }
-  }
-
-  // 5. Save to DB (only what we need, or everything?)
-  // The original code saved everything to DB.
-  // If we want to support "Fast Refresh", we should save everything.
-  // But for now, let's stick to the original behavior of saving scanned files.
-  
-  // We need to convert FileEntry back to the format expected by upsertFilesBatch
-  // And we should probably save the hashes too if the DB supports it.
-  // The current DB schema might need updates.
-  
-  // For this step, I will just save everything we scanned to maintain compatibility with existing "Results" view
-  // But ideally we should update the DB schema to store hashes.
+  // 3. Save to DB
+  // We save everything we scanned. The processor will handle hashing and duplicate detection.
   
   const batch = [];
   for (const [size, entries] of filesBySize) {
@@ -195,7 +130,6 @@ export async function scanFiles(options: ScanOptions, mainWindow: BrowserWindow)
               path: entry.path,
               size: entry.size,
               mtime: entry.mtime,
-              // We might want to add hash here if DB supports it
           });
           if (batch.length >= 1000) {
               upsertFilesBatch(batch);

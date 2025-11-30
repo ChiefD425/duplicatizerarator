@@ -38,21 +38,36 @@ export async function processDuplicates(mainWindow: BrowserWindow): Promise<void
     
     mainWindow.webContents.send('processing-progress', { current: 0, total: partialCandidates.length })
 
+    // Batching buffer
+    let buffer: { id: number, hash: string }[] = []
+    const flushBuffer = () => {
+      if (buffer.length === 0) return
+      const updateMany = db.transaction((items: { id: number, hash: string }[]) => {
+        for (const item of items) updatePartialHashStmt.run(item.hash, item.id)
+      })
+      updateMany(buffer)
+      buffer = []
+    }
+
     await processQueue(
       partialCandidates,
-      8, // Concurrency
+      2, // Lower concurrency to keep UI responsive
       async (file) => {
         return await calculatePartialHash(file.path, file.size)
       },
       (file, result) => {
-        updatePartialHashStmt.run(result, file.id)
+        buffer.push({ id: file.id, hash: result })
+        if (buffer.length >= 100) flushBuffer()
       },
       (processed, total) => {
-        if (processed % 10 === 0 || processed === total) {
+        // Update UI more frequently
+        if (processed % 5 === 0 || processed === total) {
           mainWindow.webContents.send('processing-progress', { current: processed, total })
         }
       }
     )
+    // Flush remaining
+    flushBuffer()
   }
 
   // 3. Find files with same Partial Hash
@@ -75,19 +90,33 @@ export async function processDuplicates(mainWindow: BrowserWindow): Promise<void
     
     mainWindow.webContents.send('hashing-progress', { current: 0, total: fullCandidates.length })
 
+    // Batching buffer
+    let buffer: { id: number, hash: string }[] = []
+    const flushBuffer = () => {
+      if (buffer.length === 0) return
+      const updateMany = db.transaction((items: { id: number, hash: string }[]) => {
+        for (const item of items) updateFullHashStmt.run(item.hash, item.id)
+      })
+      updateMany(buffer)
+      buffer = []
+    }
+
     await processQueue(
       fullCandidates,
-      8, // Concurrency
+      2, // Lower concurrency
       async (file) => {
         return await calculateFullHash(file.path)
       },
       (file, result) => {
-        updateFullHashStmt.run(result, file.id)
+        buffer.push({ id: file.id, hash: result })
+        if (buffer.length >= 100) flushBuffer()
       },
       (processed, total) => {
         mainWindow.webContents.send('hashing-progress', { current: processed, total })
       }
     )
+    // Flush remaining
+    flushBuffer()
   }
 
   // Done
@@ -118,10 +147,16 @@ async function processQueue<T, R>(
         onResult(item, result)
       } catch (err) {
         // Ignore errors, just count as processed
+        console.error(err)
       }
       
       processed++
       onProgress(processed, total)
+
+      // Yield to event loop every few items to keep UI responsive
+      if (processed % 5 === 0) {
+        await new Promise(resolve => setTimeout(resolve, 5))
+      }
     }
   })
 

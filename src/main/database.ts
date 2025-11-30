@@ -44,16 +44,15 @@ export function initDatabase(): void {
 }
 
 export function upsertFile(path: string, size: number, mtime: number): void {
-  // If the scanner calls this, it means the file is either new or modified.
-  // So we should set hashes to NULL.
+  // Only reset hashes if size or mtime changed
   const stmt = db.prepare(`
     INSERT INTO files (path, size, mtime, partial_hash, full_hash) 
     VALUES (?, ?, ?, NULL, NULL)
     ON CONFLICT(path) DO UPDATE SET
+      partial_hash = CASE WHEN files.size != excluded.size OR files.mtime != excluded.mtime THEN NULL ELSE files.partial_hash END,
+      full_hash = CASE WHEN files.size != excluded.size OR files.mtime != excluded.mtime THEN NULL ELSE files.full_hash END,
       size = excluded.size,
-      mtime = excluded.mtime,
-      partial_hash = NULL,
-      full_hash = NULL
+      mtime = excluded.mtime
   `)
   stmt.run(path, size, mtime)
 }
@@ -65,10 +64,10 @@ export function upsertFilesBatch(files: { path: string, size: number, mtime: num
     INSERT INTO files (path, size, mtime, partial_hash, full_hash) 
     VALUES (@path, @size, @mtime, NULL, NULL)
     ON CONFLICT(path) DO UPDATE SET
+      partial_hash = CASE WHEN files.size != excluded.size OR files.mtime != excluded.mtime THEN NULL ELSE files.partial_hash END,
+      full_hash = CASE WHEN files.size != excluded.size OR files.mtime != excluded.mtime THEN NULL ELSE files.full_hash END,
       size = excluded.size,
-      mtime = excluded.mtime,
-      partial_hash = NULL,
-      full_hash = NULL
+      mtime = excluded.mtime
   `)
 
   const insertMany = db.transaction((files) => {
