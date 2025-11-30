@@ -115,11 +115,48 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
     return <File size={16} />
   }
 
-  const getPreviewSrc = (path: string) => {
-    // Use custom protocol for local files
-    // Encode the path to handle special characters like #, ?, %
-    return `media://${encodeURIComponent(path)}`
-  }
+  const [previewSrc, setPreviewSrc] = useState<string | null>(null)
+  const [previewError, setPreviewError] = useState(false)
+  const [loadingPreview, setLoadingPreview] = useState(false)
+
+  useEffect(() => {
+    if (!previewFile) {
+      setPreviewSrc(null)
+      setPreviewError(false)
+      return
+    }
+
+    const loadPreview = async () => {
+      console.log('[Renderer] Loading preview for:', previewFile.path)
+      setLoadingPreview(true)
+      setPreviewError(false)
+      setPreviewSrc(null)
+      
+      try {
+        const ext = previewFile.path.split('.').pop()?.toLowerCase()
+        console.log('[Renderer] File extension:', ext)
+        if (['jpg', 'png', 'gif', 'webp', 'jpeg', 'bmp'].includes(ext || '')) {
+          console.log('[Renderer] Requesting preview from main process...')
+          const src = await window.api.getFilePreview(previewFile.path)
+          console.log('[Renderer] Received preview src:', src ? 'Data URL present' : 'null')
+          if (src) {
+            setPreviewSrc(src)
+          } else {
+            setPreviewError(true)
+          }
+        } else {
+          console.log('[Renderer] Extension not supported for preview')
+        }
+      } catch (err) {
+        console.error('[Renderer] Error loading preview:', err)
+        setPreviewError(true)
+      } finally {
+        setLoadingPreview(false)
+      }
+    }
+
+    loadPreview()
+  }, [previewFile])
 
   return (
     <motion.div 
@@ -245,21 +282,23 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
               initial={{ x: 300, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: 300, opacity: 0 }}
+              key="preview-pane"
             >
               <div className="preview-header">
                 <h3>Preview</h3>
                 <button onClick={() => setPreviewFile(null)}>×</button>
               </div>
               <div className="preview-content">
-                {['jpg', 'png', 'gif', 'webp', 'jpeg', 'bmp'].includes(previewFile.path.split('.').pop()?.toLowerCase() || '') ? (
-                  <img src={getPreviewSrc(previewFile.path)} alt="Preview" onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                    (e.target as HTMLImageElement).parentElement!.innerHTML += '<p>Preview failed to load</p>'
-                  }} />
+                {loadingPreview ? (
+                  <div className="no-preview">
+                    <p>Loading preview...</p>
+                  </div>
+                ) : previewSrc ? (
+                  <img src={previewSrc} alt="Preview" />
                 ) : (
                   <div className="no-preview">
                     {getIcon(previewFile.path)}
-                    <p>No preview available for this file type</p>
+                    <p>{previewError ? 'Preview failed to load' : 'No preview available for this file type'}</p>
                   </div>
                 )}
                 <div className="file-meta">

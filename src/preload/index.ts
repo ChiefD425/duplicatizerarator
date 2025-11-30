@@ -10,6 +10,7 @@ const api = {
   getHistory: () => ipcRenderer.invoke('get-history'),
   restoreFiles: (historyIds: number[]) => ipcRenderer.invoke('restore-files', historyIds),
   showItemInFolder: (path: string) => ipcRenderer.invoke('show-item-in-folder', path),
+  getFilePreview: (path: string) => ipcRenderer.invoke('get-file-preview', path),
   cancelScan: () => ipcRenderer.invoke('cancel-scan'),
   onScanProgress: (callback: (event: any, value: any) => void) => ipcRenderer.on('scan-progress', callback),
   onScanComplete: (callback: (event: any, value: any) => void) => ipcRenderer.on('scan-complete', callback),

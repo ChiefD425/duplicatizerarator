@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, protocol } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, protocol, nativeImage } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 // @ts-ignore
@@ -150,6 +150,23 @@ ipcMain.handle('restore-files', async (_event, historyIds) => {
 ipcMain.handle('show-item-in-folder', async (_event, path) => {
   shell.showItemInFolder(path)
   return { success: true }
+})
+
+ipcMain.handle('get-file-preview', async (_event, path) => {
+  console.log('[Main] get-file-preview called for:', path)
+  try {
+    const image = nativeImage.createFromPath(path)
+    if (image.isEmpty()) {
+      console.log('[Main] Image is empty for path:', path)
+      return null
+    }
+    const dataURL = image.resize({ width: 800 }).toDataURL()
+    console.log('[Main] Preview generated successfully, data URL length:', dataURL.length)
+    return dataURL
+  } catch (error) {
+    console.error('[Main] Failed to load preview:', error)
+    return null
+  }
 })
 
 ipcMain.on('ping', () => console.log('pong'))
