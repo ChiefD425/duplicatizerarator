@@ -11,7 +11,7 @@ interface ResultsProps {
 export default function Results({ onMove }: ResultsProps): JSX.Element {
   const [duplicates, setDuplicates] = useState<any[]>([])
   const [selectedIds, setSelectedIds] = useState<number[]>([])
-  const [previewFile, setPreviewFile] = useState<any | null>(null)
+  const [previewFiles, setPreviewFiles] = useState<any[]>([])
   
   // Filter States
   const [search, setSearch] = useState('')
@@ -60,9 +60,19 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
   }, [page])
 
   const toggleSelect = (id: number) => {
-    setSelectedIds(prev => 
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    )
+    setSelectedIds(prev => {
+      const newSelection = prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+      
+      // Update preview files based on selection
+      // Find the group that contains this file
+      const group = duplicates.find((g: any[]) => g.some((f: any) => f.id === id))
+      if (group) {
+        const selectedInGroup = group.filter((f: any) => newSelection.includes(f.id))
+        setPreviewFiles(selectedInGroup)
+      }
+      
+      return newSelection
+    })
   }
 
   const handleMove = async () => {
@@ -115,48 +125,55 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
     return <File size={16} />
   }
 
-  const [previewSrc, setPreviewSrc] = useState<string | null>(null)
-  const [previewError, setPreviewError] = useState(false)
-  const [loadingPreview, setLoadingPreview] = useState(false)
+  const [previewSrcs, setPreviewSrcs] = useState<Map<string, string>>(new Map())
+  const [previewErrors, setPreviewErrors] = useState<Set<string>>(new Set())
+  const [loadingPreviews, setLoadingPreviews] = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    if (!previewFile) {
-      setPreviewSrc(null)
-      setPreviewError(false)
+    if (previewFiles.length === 0) {
+      setPreviewSrcs(new Map())
+      setPreviewErrors(new Set())
       return
     }
 
-    const loadPreview = async () => {
-      console.log('[Renderer] Loading preview for:', previewFile.path)
-      setLoadingPreview(true)
-      setPreviewError(false)
-      setPreviewSrc(null)
-      
-      try {
-        const ext = previewFile.path.split('.').pop()?.toLowerCase()
-        console.log('[Renderer] File extension:', ext)
-        if (['jpg', 'png', 'gif', 'webp', 'jpeg', 'bmp'].includes(ext || '')) {
-          console.log('[Renderer] Requesting preview from main process...')
-          const src = await window.api.getFilePreview(previewFile.path)
-          console.log('[Renderer] Received preview src:', src ? 'Data URL present' : 'null')
-          if (src) {
-            setPreviewSrc(src)
+    const loadPreviews = async () => {
+      const newSrcs = new Map(previewSrcs)
+      const newErrors = new Set(previewErrors)
+      const newLoading = new Set(loadingPreviews)
+
+      for (const file of previewFiles) {
+        if (newSrcs.has(file.path) || newErrors.has(file.path) || newLoading.has(file.path)) continue
+
+        newLoading.add(file.path)
+        setLoadingPreviews(new Set(newLoading))
+
+        try {
+          const ext = file.path.split('.').pop()?.toLowerCase()
+          if (['jpg', 'png', 'gif', 'webp', 'jpeg', 'bmp'].includes(ext || '')) {
+            const src = await window.api.getFilePreview(file.path)
+            if (src) {
+              newSrcs.set(file.path, src)
+            } else {
+              newErrors.add(file.path)
+            }
           } else {
-            setPreviewError(true)
+            // Not supported for preview
           }
-        } else {
-          console.log('[Renderer] Extension not supported for preview')
+        } catch (err) {
+          console.error('Error loading preview:', err)
+          newErrors.add(file.path)
+        } finally {
+          newLoading.delete(file.path)
         }
-      } catch (err) {
-        console.error('[Renderer] Error loading preview:', err)
-        setPreviewError(true)
-      } finally {
-        setLoadingPreview(false)
       }
+      
+      setPreviewSrcs(new Map(newSrcs))
+      setPreviewErrors(new Set(newErrors))
+      setLoadingPreviews(new Set(newLoading))
     }
 
-    loadPreview()
-  }, [previewFile])
+    loadPreviews()
+  }, [previewFiles])
 
   return (
     <motion.div 
@@ -258,7 +275,7 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
                     className="preview-btn"
                     onClick={(e) => {
                       e.stopPropagation()
-                      setPreviewFile(file)
+                      setPreviewFiles([file])
                     }}
                   >
                     <Eye size={16} />
@@ -276,7 +293,7 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
         </div>
 
         <AnimatePresence>
-          {previewFile && (
+          {previewFiles.length > 0 && (
             <motion.div 
               className="preview-pane glass"
               initial={{ x: 300, opacity: 0 }}
@@ -285,35 +302,53 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
               key="preview-pane"
             >
               <div className="preview-header">
-                <h3>Preview</h3>
-                <button onClick={() => setPreviewFile(null)}>×</button>
+                <h3>Preview ({previewFiles.length})</h3>
+                <button onClick={() => setPreviewFiles([])}>×</button>
               </div>
-              <div className="preview-content">
-                {loadingPreview ? (
-                  <div className="no-preview">
-                    <p>Loading preview...</p>
+              <div className="preview-content-scroll">
+                {previewFiles.map(file => (
+                  <div key={file.id} className="preview-card">
+                    <div className="preview-card-header">
+                      <button 
+                        className="action-btn-small open-file-btn"
+                        onClick={() => handleShowInFolder(file.path)}
+                        title="Show in Explorer"
+                      >
+                        <FolderOpen size={14} /> Open
+                      </button>
+                      <button 
+                        className="move-bucket-btn"
+                        onClick={async () => {
+                          await onMove([file.id])
+                          // Remove from preview files
+                          setPreviewFiles(prev => prev.filter(p => p.id !== file.id))
+                          loadDuplicates()
+                        }}
+                        title="Move file"
+                      >
+                        <Trash2 size={14} /> Move File
+                      </button>
+                    </div>
+                    <div className="preview-image-container">
+                      {loadingPreviews.has(file.path) ? (
+                        <div className="no-preview"><p>Loading...</p></div>
+                      ) : previewSrcs.has(file.path) ? (
+                        <img src={previewSrcs.get(file.path)} alt="Preview" />
+                      ) : (
+                        <div className="no-preview">
+                          {getIcon(file.path)}
+                          <p>{previewErrors.has(file.path) ? 'Preview failed' : 'No preview'}</p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="file-meta">
+                      <p className="file-name" title={file.path.split('\\').pop()}>{file.path.split('\\').pop()}</p>
+                      <p><strong>Location:</strong> {file.path}</p>
+                      <p><strong>Size:</strong> {(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                      <p><strong>Created:</strong> {new Date(file.created_at).toLocaleDateString()}</p>
+                    </div>
                   </div>
-                ) : previewSrc ? (
-                  <img src={previewSrc} alt="Preview" />
-                ) : (
-                  <div className="no-preview">
-                    {getIcon(previewFile.path)}
-                    <p>{previewError ? 'Preview failed to load' : 'No preview available for this file type'}</p>
-                  </div>
-                )}
-                <div className="file-meta">
-                  <p><strong>Path:</strong> {previewFile.path}</p>
-                  <p><strong>Size:</strong> {(previewFile.size / 1024 / 1024).toFixed(2)} MB</p>
-                  <p><strong>Created:</strong> {new Date(previewFile.created_at).toLocaleString()}</p>
-                </div>
-                <div className="preview-actions">
-                  <button 
-                    className="action-btn"
-                    onClick={() => handleShowInFolder(previewFile.path)}
-                  >
-                    <FolderOpen size={16} /> Show in Explorer
-                  </button>
-                </div>
+                ))}
               </div>
             </motion.div>
           )}

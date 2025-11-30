@@ -1,5 +1,6 @@
 import { app, shell, BrowserWindow, ipcMain, protocol, nativeImage } from 'electron'
 import { join } from 'path'
+import { existsSync, readFileSync } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 // @ts-ignore
 import icon from '../../resources/icon.png?asset'
@@ -153,18 +154,35 @@ ipcMain.handle('show-item-in-folder', async (_event, path) => {
 })
 
 ipcMain.handle('get-file-preview', async (_event, path) => {
-  console.log('[Main] get-file-preview called for:', path)
+  logger.info('[Main] get-file-preview called for:', path)
   try {
-    const image = nativeImage.createFromPath(path)
-    if (image.isEmpty()) {
-      console.log('[Main] Image is empty for path:', path)
+    if (!existsSync(path)) {
+      logger.error('[Main] File does not exist:', path)
       return null
     }
-    const dataURL = image.resize({ width: 800 }).toDataURL()
-    console.log('[Main] Preview generated successfully, data URL length:', dataURL.length)
-    return dataURL
-  } catch (error) {
-    console.error('[Main] Failed to load preview:', error)
+
+    const image = nativeImage.createFromPath(path)
+    if (!image.isEmpty()) {
+      const dataURL = image.resize({ width: 800 }).toDataURL()
+      logger.info('[Main] Preview generated via nativeImage')
+      return dataURL
+    }
+    
+    logger.warn('[Main] nativeImage empty, trying fallback read...')
+    // Fallback: read file directly and convert to base64
+    const buffer = readFileSync(path)
+    const base64 = buffer.toString('base64')
+    const ext = path.split('.').pop()?.toLowerCase()
+    const mimeType = ext === 'png' ? 'image/png' : 
+                    ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 
+                    ext === 'gif' ? 'image/gif' : 
+                    ext === 'webp' ? 'image/webp' : 'application/octet-stream'
+    
+    logger.info('[Main] Preview generated via fallback read')
+    return `data:${mimeType};base64,${base64}`
+
+  } catch (error: any) {
+    logger.error('[Main] Failed to load preview:', error.message)
     return null
   }
 })

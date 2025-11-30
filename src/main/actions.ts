@@ -10,17 +10,10 @@ export async function moveFiles(fileIds: number[]): Promise<void> {
   
   if (files.length === 0) return
 
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-  // We'll put them in a folder relative to the drive root if possible, or user home?
-  // The request said "Duplicatizerarator folder for the user to delete manually".
-  // Best practice: Create it in the same drive to avoid cross-drive moves which are slow.
-  // But for simplicity, let's try to put it in the user's home directory or a specific location.
-  // Actually, to be safe and fast, it should be on the same volume.
-  // Let's assume we create a "Duplicatizerarator" folder in the User's Home for now, 
-  // or maybe better: The root of the drive where the file is? 
-  // Let's stick to User Home/Duplicatizerarator/{timestamp} for simplicity and safety.
+  const date = new Date()
+  const dateStr = date.toISOString().split('T')[0] // YYYY-MM-DD
   
-  const targetBaseDir = join(app.getPath('home'), DUPLICATIZERARATOR_FOLDER, timestamp)
+  const targetBaseDir = join(app.getPath('home'), DUPLICATIZERARATOR_FOLDER, dateStr)
   await mkdir(targetBaseDir, { recursive: true })
 
   const insertHistory = db.prepare('INSERT INTO history (original_path, moved_path) VALUES (?, ?)')
