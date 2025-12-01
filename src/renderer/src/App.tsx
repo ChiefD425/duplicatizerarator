@@ -10,9 +10,9 @@ import DebugPanel, { LogMessage } from './components/DebugPanel'
 import { History as HistoryIcon, Home, Info, Bug, Settings as SettingsIcon } from 'lucide-react'
 
 function App(): JSX.Element {
-  const [view, setView] = useState<'dashboard' | 'scanning' | 'results' | 'history'>('dashboard')
+  const [view, setView] = useState<'dashboard' | 'scanning' | 'results' | 'history' | 'settings'>('dashboard')
   const [showAbout, setShowAbout] = useState(false)
-  const [showSettings, setShowSettings] = useState(false)
+
   const [scanProgress, setScanProgress] = useState({ stage: 'Ready', count: 0, total: 0 })
   const [isScanning, setIsScanning] = useState(false)
   const [showDebug, setShowDebug] = useState(false)
@@ -106,8 +106,8 @@ function App(): JSX.Element {
         </button>
         <div style={{ flex: 1 }} /> {/* Spacer */}
         <button 
-          className="nav-btn" 
-          onClick={() => setShowSettings(true)} 
+          className={`nav-btn ${view === 'settings' ? 'active' : ''}`} 
+          onClick={() => setView('settings')} 
           title="Settings"
         >
           <SettingsIcon size={22} />
@@ -135,11 +135,11 @@ function App(): JSX.Element {
             {view === 'scanning' && <Scanning key="scanning" progress={scanProgress} onCancel={cancelScan} />}
             {view === 'results' && <Results key="results" onMove={handleMove} />}
             {view === 'history' && <History key="history" />}
+            {view === 'settings' && <Settings key="settings" />}
           </AnimatePresence>
 
           <AnimatePresence>
             {showAbout && <About key="about" onClose={() => setShowAbout(false)} />}
-            {showSettings && <Settings key="settings" onClose={() => setShowSettings(false)} />}
           </AnimatePresence>
         </div>
 

@@ -1,4 +1,17 @@
 
+import { app, shell, BrowserWindow, ipcMain, protocol, nativeImage } from 'electron'
+import { join } from 'path'
+import { existsSync, readFileSync } from 'fs'
+import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+// @ts-ignore
+import icon from '../../resources/icon.png?asset'
+import { initDatabase, getDuplicates, getDuplicateFolders, addExcludedFolder, getExcludedFolders, removeExcludedFolder, removeFilesByPrefix } from './database'
+import { scanFiles, cancelScan } from './scanner'
+import { processDuplicates } from './processor'
+import { getDrives } from './utils'
+import { moveFiles, restoreFiles, getHistory } from './actions'
+import { logger } from './logger'
+
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
@@ -142,9 +155,6 @@ ipcMain.handle('get-duplicate-folders', () => {
   return getDuplicateFolders()
 })
 
-ipcMain.handle('get-duplicate-stats', () => {
-  return getDuplicateStats()
-})
 
 ipcMain.handle('move-files', async (_event, fileIds) => {
   await moveFiles(fileIds)

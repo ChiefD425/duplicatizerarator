@@ -1,12 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { Trash2, Plus, FolderOpen } from 'lucide-react'
+import { Trash2, Plus, FolderOpen, Shield, AlertCircle } from 'lucide-react'
 import { motion } from 'framer-motion'
 
-interface SettingsProps {
-  onClose: () => void
-}
-
-const Settings: React.FC<SettingsProps> = ({ onClose }) => {
+const Settings: React.FC = () => {
   const [excludedFolders, setExcludedFolders] = useState<string[]>([])
   const [newPath, setNewPath] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -62,56 +58,73 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
 
   return (
     <motion.div 
-      className="settings-overlay"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+      className="view-content settings-view"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
     >
-      <div className="settings-modal">
-        <div className="settings-header">
-          <h2>Settings</h2>
-          <button className="close-btn" onClick={onClose}>&times;</button>
-        </div>
-        
-        <div className="settings-content">
-          <h3>Excluded Folders</h3>
-          <p className="settings-desc">
-            These folders will be ignored during scans. Existing files from these folders will be removed from the database.
-          </p>
+      <div className="view-header">
+        <h1>Settings</h1>
+        <p className="subtitle">Manage application preferences and exclusions</p>
+      </div>
 
-          <div className="add-exclusion-form">
-            <input 
-              type="text" 
-              value={newPath}
-              onChange={(e) => setNewPath(e.target.value)}
-              placeholder="Enter folder path to exclude..."
-              className="exclusion-input"
-            />
-            <button className="add-btn" onClick={handleAdd} disabled={!newPath}>
+      <div className="settings-section">
+        <div className="section-header">
+          <Shield className="section-icon" size={24} />
+          <div>
+            <h2>Excluded Folders</h2>
+            <p>Manage folders that should be ignored during scans. Files in these folders will not be indexed.</p>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="add-exclusion-row">
+            <div className="input-group">
+              <FolderOpen size={20} className="input-icon" />
+              <input 
+                type="text" 
+                value={newPath}
+                onChange={(e) => setNewPath(e.target.value)}
+                placeholder="Enter absolute folder path to exclude (e.g. C:\Windows)"
+                className="premium-input"
+              />
+            </div>
+            <button className="btn-primary" onClick={handleAdd} disabled={!newPath}>
               <Plus size={18} />
-              Add
+              <span>Add Exclusion</span>
             </button>
           </div>
           
-          {error && <div className="error-message">{error}</div>}
+          {error && (
+            <div className="error-banner">
+              <AlertCircle size={16} />
+              <span>{error}</span>
+            </div>
+          )}
 
-          <div className="exclusions-list">
+          <div className="exclusions-list-container">
             {excludedFolders.length === 0 ? (
-              <div className="empty-state">No excluded folders</div>
+              <div className="empty-state-small">
+                <p>No excluded folders configured</p>
+              </div>
             ) : (
-              excludedFolders.map((path) => (
-                <div key={path} className="exclusion-item">
-                  <FolderOpen size={16} className="folder-icon" />
-                  <span className="path-text">{path}</span>
-                  <button 
-                    className="remove-btn"
-                    onClick={() => handleRemove(path)}
-                    title="Remove exclusion"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ))
+              <div className="exclusions-grid">
+                {excludedFolders.map((path) => (
+                  <div key={path} className="exclusion-card">
+                    <div className="exclusion-info">
+                      <FolderOpen size={18} className="folder-icon" />
+                      <span className="path-text" title={path}>{path}</span>
+                    </div>
+                    <button 
+                      className="btn-icon-danger"
+                      onClick={() => handleRemove(path)}
+                      title="Remove exclusion"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>
