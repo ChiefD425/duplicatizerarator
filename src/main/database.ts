@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'path'
+import { createHash } from 'crypto'
 
 const dbPath = join(app.getPath('userData'), 'duplicatizerarator.db')
 const db = new Database(dbPath)
@@ -149,6 +150,76 @@ export function getDuplicates(options: {
 
 export function clearFiles(): void {
   db.exec('DELETE FROM files')
+}
+
+export function getDuplicateFolders(): any[] {
+  // 1. Get all files with full_hash (meaning they are duplicates of something)
+  // We need path and hash to build folder fingerprints
+  const files = db.prepare(`
+    SELECT path, full_hash, size FROM files 
+    WHERE full_hash IS NOT NULL
+    ORDER BY path
+  `).all() as { path: string, full_hash: string, size: number }[]
+
+  if (files.length === 0) return []
+
+  // 2. Group by folder
+  const folders = new Map<string, { files: any[], size: number }>()
+  
+  for (const file of files) {
+    // Get directory path (cross-platform safe)
+    const dir = file.path.substring(0, Math.max(file.path.lastIndexOf('/'), file.path.lastIndexOf('\\')))
+    
+    if (!folders.has(dir)) {
+      folders.set(dir, { files: [], size: 0 })
+    }
+    const folder = folders.get(dir)!
+    folder.files.push(file)
+    folder.size += file.size
+  }
+
+  // 3. Generate Fingerprints
+  // Fingerprint = Hash of (Sorted List of (Filename + FileHash))
+  // This ensures that if a folder has the same files (names and content), it gets the same fingerprint.
+  const folderFingerprints = new Map<string, any[]>()
+
+  for (const [dir, data] of folders) {
+    // Sort files by name to ensure deterministic order
+    data.files.sort((a, b) => {
+      const nameA = a.path.split(/[/\\]/).pop()!
+      const nameB = b.path.split(/[/\\]/).pop()!
+      return nameA.localeCompare(nameB)
+    })
+
+    // Create fingerprint string
+    const fingerprintStr = data.files.map(f => {
+      const name = f.path.split(/[/\\]/).pop()!
+      return `${name}:${f.full_hash}`
+    }).join('|')
+
+    const fingerprint = createHash('sha256').update(fingerprintStr).digest('hex')
+
+    if (!folderFingerprints.has(fingerprint)) {
+      folderFingerprints.set(fingerprint, [])
+    }
+    folderFingerprints.get(fingerprint)!.push({
+      path: dir,
+      size: data.size,
+      fileCount: data.files.length,
+      files: data.files
+    })
+  }
+
+  // 4. Filter for duplicates (groups > 1)
+  const result: any[] = []
+  for (const [fingerprint, group] of folderFingerprints) {
+    if (group.length > 1) {
+      result.push(group)
+    }
+  }
+  
+  console.log(`[Database] Found ${result.length} duplicate folder groups.`)
+  return result
 }
 
 export default db

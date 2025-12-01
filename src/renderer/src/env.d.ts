@@ -5,6 +5,7 @@ interface Window {
     getDrives: () => Promise<any[]>
     startScan: (options: any) => Promise<any>
     getDuplicates: (options?: any) => Promise<any[]>
+    getDuplicateFolders: () => Promise<any[]>
     moveFiles: (fileIds: number[]) => Promise<any>
     getHistory: () => Promise<any[]>
     restoreFiles: (historyIds: number[]) => Promise<any>

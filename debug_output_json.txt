@@ -1,0 +1,56 @@
+
+Opening DB at: C:\Users\fredd\AppData\Roaming\Duplicatizerarator\duplicatizerarator.db
+Querying for files in: D:\users\fredd\Downloads\forge-gui-desktop-1.6.7.tar\res\music\match
+[
+  {
+    "path": "D:\\users\\fredd\\Downloads\\forge-gui-desktop-1.6.7.tar\\res\\music\\match\\Dangerous.mp3",
+    "size": 2418498,
+    "partial_hash": "5dcb359f0053dfea4669baea79ebc5c3404c0d4daac6abc4643da3446e82aa58",
+    "full_hash": "467277e28a8546ba15278ed1002c7ab6be3f15fa746145abdd82e51e456800b4"
+  },
+  {
+    "path": "D:\\users\\fredd\\Downloads\\forge-gui-desktop-1.6.7.tar\\res\\music\\match\\Failing Defense.mp3",
+    "size": 4222281,
+    "partial_hash": "5848ee36702cf59b2d7372c5a319ff8d5c4bc264a44d0dca8d6a5f42147c42b6",
+    "full_hash": "277abddb76936396dbccf8b731258a3d1b9c2e320e41d49923dd00b9fe21e9bd"
+  },
+  {
+    "path": "D:\\users\\fredd\\Downloads\\forge-gui-desktop-1.6.7.tar\\res\\music\\match\\Hitman.mp3",
+    "size": 8035387,
+    "partial_hash": "8fb9a2683554379dc7472659f4a2b8a8dd2ab17494fda295198e7329ce777cfb",
+    "full_hash": "005d6e28345e3c50a0715f5cf887c4cf02c3fa70910cdacc312bf348a3f2a647"
+  },
+  {
+    "path": "D:\\users\\fredd\\Downloads\\forge-gui-desktop-1.6.7.tar\\res\\music\\match\\Prelude and Action.mp3",
+    "size": 3956095,
+    "partial_hash": "609e1479ab6b8807af506600bfe2fbdb850f4cb020262dff00fb939a68c957fb",
+    "full_hash": "104a25f501951939fe87292b6116fa82f4a4b7be22122805154b316451d4fefd"
+  }
+]
+Querying for files in: C:\Users\fredd\Dropbox\MTG\forge\res\music\match
+[
+  {
+    "path": "C:\\Users\\fredd\\Dropbox\\MTG\\forge\\res\\music\\match\\Dangerous.mp3",
+    "size": 2418498,
+    "partial_hash": "5dcb359f0053dfea4669baea79ebc5c3404c0d4daac6abc4643da3446e82aa58",
+    "full_hash": "467277e28a8546ba15278ed1002c7ab6be3f15fa746145abdd82e51e456800b4"
+  },
+  {
+    "path": "C:\\Users\\fredd\\Dropbox\\MTG\\forge\\res\\music\\match\\Failing Defense.mp3",
+    "size": 4222281,
+    "partial_hash": "5848ee36702cf59b2d7372c5a319ff8d5c4bc264a44d0dca8d6a5f42147c42b6",
+    "full_hash": "277abddb76936396dbccf8b731258a3d1b9c2e320e41d49923dd00b9fe21e9bd"
+  },
+  {
+    "path": "C:\\Users\\fredd\\Dropbox\\MTG\\forge\\res\\music\\match\\Hitman.mp3",
+    "size": 8035387,
+    "partial_hash": "8fb9a2683554379dc7472659f4a2b8a8dd2ab17494fda295198e7329ce777cfb",
+    "full_hash": "005d6e28345e3c50a0715f5cf887c4cf02c3fa70910cdacc312bf348a3f2a647"
+  },
+  {
+    "path": "C:\\Users\\fredd\\Dropbox\\MTG\\forge\\res\\music\\match\\Prelude and Action.mp3",
+    "size": 3956095,
+    "partial_hash": "609e1479ab6b8807af506600bfe2fbdb850f4cb020262dff00fb939a68c957fb",
+    "full_hash": "104a25f501951939fe87292b6116fa82f4a4b7be22122805154b316451d4fefd"
+  }
+]

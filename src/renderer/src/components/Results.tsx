@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { File, Image, Music, Video, Trash2, Eye, Check, Search, Filter as FilterIcon, ChevronLeft, ChevronRight, FolderOpen, FileText, Presentation } from 'lucide-react'
+import { File, Image, Music, Video, Trash2, Eye, Check, Search, Filter as FilterIcon, ChevronLeft, ChevronRight, FolderOpen, FileText, Presentation, Folder } from 'lucide-react'
 import '../assets/results.css'
 
 interface ResultsProps {
@@ -10,7 +10,10 @@ interface ResultsProps {
 
 export default function Results({ onMove }: ResultsProps): JSX.Element {
   const [duplicates, setDuplicates] = useState<any[]>([])
+  const [duplicateFolders, setDuplicateFolders] = useState<any[]>([])
+  const [viewMode, setViewMode] = useState<'files' | 'folders'>('files')
   const [selectedIds, setSelectedIds] = useState<number[]>([])
+  const [selectedFolderPaths, setSelectedFolderPaths] = useState<string[]>([])
   const [previewFiles, setPreviewFiles] = useState<any[]>([])
   
   // Filter States
@@ -47,13 +50,22 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
     setDuplicates(grouped)
   }
 
+  const loadDuplicateFolders = async () => {
+    const folders = await window.api.getDuplicateFolders()
+    setDuplicateFolders(folders)
+  }
+
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setPage(0) // Reset to page 0 on filter change
-      loadDuplicates()
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [search, minSize])
+    if (viewMode === 'files') {
+      const timer = setTimeout(() => {
+        setPage(0) // Reset to page 0 on filter change
+        loadDuplicates()
+      }, 300)
+      return () => clearTimeout(timer)
+    } else {
+      loadDuplicateFolders()
+    }
+  }, [search, minSize, viewMode])
 
   useEffect(() => {
     loadDuplicates()
@@ -75,11 +87,37 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
     })
   }
 
+  const toggleFolderSelect = (path: string) => {
+    setSelectedFolderPaths(prev => prev.includes(path) ? prev.filter(p => p !== path) : [...prev, path])
+  }
+
   const handleMove = async () => {
-    if (selectedIds.length === 0) return
-    await onMove(selectedIds)
-    loadDuplicates()
-    setSelectedIds([])
+    if (viewMode === 'files') {
+      if (selectedIds.length === 0) return
+      await onMove(selectedIds)
+      loadDuplicates()
+      setSelectedIds([])
+    } else {
+      if (selectedFolderPaths.length === 0) return
+      // For folders, we need to get all file IDs in these folders
+      // Since we don't have a direct "delete folder" API yet, we'll just delete the files we know about
+      // Or we can implement a deleteFolder API. For now let's collect IDs from the loaded data.
+      
+      const idsToDelete: number[] = []
+      duplicateFolders.forEach(group => {
+        group.forEach((folder: any) => {
+          if (selectedFolderPaths.includes(folder.path)) {
+            folder.files.forEach((f: any) => idsToDelete.push(f.id))
+          }
+        })
+      })
+      
+      if (idsToDelete.length > 0) {
+        await onMove(idsToDelete)
+        loadDuplicateFolders()
+        setSelectedFolderPaths([])
+      }
+    }
   }
 
   const handleShowInFolder = async (path: string) => {
@@ -193,8 +231,24 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
       <div className="results-header">
         <div className="header-top">
           <h2>Duplicates Found</h2>
+          <div className="view-toggle" style={{ marginLeft: '20px', display: 'flex', gap: '5px', background: 'rgba(255,255,255,0.1)', padding: '4px', borderRadius: '8px' }}>
+            <button 
+              className={`toggle-btn ${viewMode === 'files' ? 'active' : ''}`}
+              onClick={() => setViewMode('files')}
+              style={{ padding: '4px 12px', borderRadius: '6px', border: 'none', background: viewMode === 'files' ? 'rgba(255,255,255,0.2)' : 'transparent', color: 'white', cursor: 'pointer' }}
+            >
+              Files
+            </button>
+            <button 
+              className={`toggle-btn ${viewMode === 'folders' ? 'active' : ''}`}
+              onClick={() => setViewMode('folders')}
+              style={{ padding: '4px 12px', borderRadius: '6px', border: 'none', background: viewMode === 'folders' ? 'rgba(255,255,255,0.2)' : 'transparent', color: 'white', cursor: 'pointer' }}
+            >
+              Folders
+            </button>
+          </div>
           <div className="actions">
-            <span>{selectedIds.length} selected</span>
+            <span>{viewMode === 'files' ? selectedIds.length : selectedFolderPaths.length} selected</span>
             <button 
               className="move-btn"
               disabled={selectedIds.length === 0}
@@ -235,27 +289,29 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
             </select>
           </div>
 
-          <div className="pagination">
-            <button 
-              disabled={page === 0}
-              onClick={() => setPage(p => p - 1)}
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <span>Page {page + 1}</span>
-            <button 
-              disabled={duplicates.length < limit}
-              onClick={() => setPage(p => p + 1)}
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
+          {viewMode === 'files' && (
+            <div className="pagination">
+              <button 
+                disabled={page === 0}
+                onClick={() => setPage(p => p - 1)}
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <span>Page {page + 1}</span>
+              <button 
+                disabled={duplicates.length < limit}
+                onClick={() => setPage(p => p + 1)}
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
       <div className="results-content">
         <div className="list-view">
-          {duplicates.map((group, idx) => (
+          {viewMode === 'files' && duplicates.map((group, idx) => (
             <div key={idx} className="duplicate-group card glass">
               <div className="group-header">
                 <span 
@@ -300,9 +356,57 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
               ))}
             </div>
           ))}
-          {duplicates.length === 0 && (
+          
+          {viewMode === 'folders' && duplicateFolders.map((group, idx) => (
+            <div key={idx} className="duplicate-group card glass">
+              <div className="group-header">
+                <span className="hash-tag">Folder Group #{idx + 1}</span>
+                <span className="size-tag">{(group[0].size / 1024 / 1024).toFixed(2)} MB</span>
+              </div>
+              {group.map((folder: any) => (
+                <div 
+                  key={folder.path} 
+                  className={`file-row ${selectedFolderPaths.includes(folder.path) ? 'selected' : ''}`}
+                  onClick={() => toggleFolderSelect(folder.path)}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    handleShowInFolder(folder.path)
+                  }}
+                  title="Right-click to show in folder"
+                >
+                  <div className="checkbox">
+                    {selectedFolderPaths.includes(folder.path) && <Check size={12} />}
+                  </div>
+                  <div className="file-icon"><Folder size={16} /></div>
+                  <div className="file-details">
+                    <div className="file-name">{folder.path.split(/[/\\]/).pop()}</div>
+                    <div className="file-path">{folder.path}</div>
+                    <div className="file-meta-small" style={{ fontSize: '0.8em', opacity: 0.7 }}>
+                      {folder.fileCount} files
+                    </div>
+                  </div>
+                  <button 
+                    className="preview-btn"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleShowInFolder(folder.path)
+                    }}
+                  >
+                    <FolderOpen size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ))}
+          {duplicates.length === 0 && viewMode === 'files' && (
             <div className="empty-state">
               <h3>No duplicates found</h3>
+              <p>Try adjusting your filters</p>
+            </div>
+          )}
+          {duplicateFolders.length === 0 && viewMode === 'folders' && (
+            <div className="empty-state">
+              <h3>No duplicate folders found</h3>
               <p>Try adjusting your filters</p>
             </div>
           )}

@@ -63,6 +63,7 @@ function App(): JSX.Element {
   const startScan = (options: any) => {
     setIsScanning(true)
     setView('scanning')
+    setScanProgress({ stage: 'Starting...', count: 0, total: 0 })
     window.api.startScan(options)
   }
 

@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 // @ts-ignore
 import icon from '../../resources/icon.png?asset'
-import { initDatabase, getDuplicates } from './database'
+import { initDatabase, getDuplicates, getDuplicateFolders } from './database'
 import { scanFiles, cancelScan } from './scanner'
 import { processDuplicates } from './processor'
 import { getDrives } from './utils'
@@ -148,6 +148,10 @@ ipcMain.handle('cancel-scan', () => {
 
 ipcMain.handle('get-duplicates', (_event, options) => {
   return getDuplicates(options)
+})
+
+ipcMain.handle('get-duplicate-folders', () => {
+  return getDuplicateFolders()
 })
 
 ipcMain.handle('move-files', async (_event, fileIds) => {
