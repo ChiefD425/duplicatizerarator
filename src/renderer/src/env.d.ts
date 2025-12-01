@@ -6,6 +6,7 @@ interface Window {
     startScan: (options: any) => Promise<any>
     getDuplicates: (options?: any) => Promise<any[]>
     getDuplicateFolders: () => Promise<any[]>
+    getDuplicateStats: () => Promise<{ totalFiles: number, originalFiles: number, duplicateFolders: number }>
     moveFiles: (fileIds: number[]) => Promise<any>
     getHistory: () => Promise<any[]>
     restoreFiles: (historyIds: number[]) => Promise<any>

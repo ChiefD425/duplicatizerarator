@@ -2,6 +2,9 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { File, Image, Music, Video, Trash2, Eye, Check, Search, Filter as FilterIcon, ChevronLeft, ChevronRight, FolderOpen, FileText, Presentation, Folder } from 'lucide-react'
+import { Button } from './ui/Button'
+import { Input } from './ui/Input'
+import clsx from 'clsx'
 import '../assets/results.css'
 
 interface ResultsProps {
@@ -28,8 +31,6 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
   const handleExclude = async (path: string) => {
     await window.api.addExcludedFolder(path)
     setExclusionMenu(null)
-    // Reload both views
-    // Reload both views
     loadDuplicates()
     loadDuplicateFolders()
     loadStats()
@@ -95,7 +96,6 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
       const newSelection = prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
       
       // Update preview files based on selection
-      // Find the group that contains this file
       const group = duplicates.find((g: any[]) => g.some((f: any) => f.id === id))
       if (group) {
         const selectedInGroup = group.filter((f: any) => newSelection.includes(f.id))
@@ -119,9 +119,6 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
       setSelectedIds([])
     } else {
       if (selectedFolderPaths.length === 0) return
-      // For folders, we need to get all file IDs in these folders
-      // Since we don't have a direct "delete folder" API yet, we'll just delete the files we know about
-      // Or we can implement a deleteFolder API. For now let's collect IDs from the loaded data.
       
       const idsToDelete: number[] = []
       duplicateFolders.forEach(group => {
@@ -151,12 +148,7 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
     duplicates.forEach(group => {
       let keepId = -1
       
-      // Find the one to keep based on criteria
       if (criteria === 'newest') {
-        // Keep the one with largest created_at/mtime (assuming created_at is date string)
-        // Note: DB returns created_at as string, but we might want mtime if available.
-        // For now using created_at as proxy or mtime if we had it.
-        // Let's assume we want to sort by ID if dates are equal (stable sort)
         const sorted = [...group].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         keepId = sorted[0].id
       } else if (criteria === 'oldest') {
@@ -167,7 +159,6 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
         keepId = sorted[0].id
       }
       
-      // Select all others
       group.forEach((f: any) => {
         if (f.id !== keepId) newSelected.push(f.id)
       })
@@ -218,14 +209,8 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
               newErrors.add(file.path)
             }
           } else if (['mp3', 'wav', 'ogg', 'mp4', 'webm', 'pdf'].includes(ext || '')) {
-             // These can be loaded directly via media protocol or file protocol if supported
-             // We'll use the media protocol we saw in main/index.ts: protocol.registerFileProtocol('media', ...)
-             // So we can just set the src to media://<path>
-             // We use query params to avoid issues with path parsing
              const mediaUrl = `media://open?path=${encodeURIComponent(file.path)}`
              newSrcs.set(file.path, mediaUrl)
-          } else {
-            // Not supported for direct preview (like PPTX), we will handle in render
           }
         } catch (err) {
           console.error('Error loading preview:', err)
@@ -245,227 +230,249 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
 
   return (
     <motion.div 
-      className="results-container"
+      className="results-container h-full flex flex-col"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
     >
-      <div className="results-header">
-        <div className="header-top">
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <h2>Duplicates Found</h2>
+      <div className="results-header bg-bg-secondary border-b border-border-color p-4">
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h2 className="text-2xl font-bold text-gradient">Duplicates Found</h2>
             {stats && (
-              <div style={{ fontSize: '0.8em', opacity: 0.7, marginTop: '-5px' }}>
+              <div className="text-sm text-gray-500">
                 {stats.originalFiles} originals : {stats.totalFiles} total files | {stats.duplicateFolders} duplicate folders
               </div>
             )}
           </div>
-          <div className="view-toggle" style={{ marginLeft: '20px', display: 'flex', gap: '5px', background: 'rgba(255,255,255,0.1)', padding: '4px', borderRadius: '8px' }}>
-            <button 
-              className={`toggle-btn ${viewMode === 'files' ? 'active' : ''}`}
+          
+          <div className="flex gap-2 bg-bg-tertiary p-1 rounded-lg">
+            <Button 
+              variant={viewMode === 'files' ? 'primary' : 'ghost'}
+              size="sm"
               onClick={() => setViewMode('files')}
-              style={{ padding: '4px 12px', borderRadius: '6px', border: 'none', background: viewMode === 'files' ? 'rgba(255,255,255,0.2)' : 'transparent', color: 'white', cursor: 'pointer' }}
             >
               Files
-            </button>
-            <button 
-              className={`toggle-btn ${viewMode === 'folders' ? 'active' : ''}`}
+            </Button>
+            <Button 
+              variant={viewMode === 'folders' ? 'primary' : 'ghost'}
+              size="sm"
               onClick={() => setViewMode('folders')}
-              style={{ padding: '4px 12px', borderRadius: '6px', border: 'none', background: viewMode === 'folders' ? 'rgba(255,255,255,0.2)' : 'transparent', color: 'white', cursor: 'pointer' }}
             >
               Folders
-            </button>
+            </Button>
           </div>
-          <div className="actions">
-            <span>{viewMode === 'files' ? selectedIds.length : selectedFolderPaths.length} selected</span>
-            <button 
-              className="move-btn"
-              disabled={selectedIds.length === 0}
+
+          <div className="flex items-center gap-4">
+            <span className="text-gray-400 text-sm">
+              {viewMode === 'files' ? selectedIds.length : selectedFolderPaths.length} selected
+            </span>
+            <Button 
+              variant="destructive"
+              disabled={selectedIds.length === 0 && selectedFolderPaths.length === 0}
               onClick={handleMove}
+              icon={<Trash2 size={16} />}
             >
-              <Trash2 size={16} /> Move
-            </button>
-          </div>
-          <div className="selection-tools">
-            <button className="tool-btn" onClick={() => autoSelect('newest')}>Keep Newest</button>
-            <button className="tool-btn" onClick={() => autoSelect('oldest')}>Keep Oldest</button>
-            <button className="tool-btn" onClick={() => autoSelect('shortest')}>Keep Shortest Name</button>
+              Move
+            </Button>
           </div>
         </div>
 
-        <div className="filters-bar">
-          <div className="search-box">
-            <Search size={16} />
-            <input 
-              type="text" 
-              placeholder="Search files..." 
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          
-          <div className="filter-box">
-            <FilterIcon size={16} />
-            <select 
-              value={minSize} 
-              onChange={(e) => setMinSize(Number(e.target.value))}
-            >
-              <option value={0}>Any Size</option>
-              <option value={500 * 1024}>&gt; 500 KB</option>
-              <option value={1024 * 1024}>&gt; 1 MB</option>
-              <option value={5 * 1024 * 1024}>&gt; 5 MB</option>
-              <option value={100 * 1024 * 1024}>&gt; 100 MB</option>
-            </select>
+        <div className="flex justify-between items-center gap-4">
+          <div className="flex gap-2">
+             <Button variant="secondary" size="sm" onClick={() => autoSelect('newest')}>Keep Newest</Button>
+             <Button variant="secondary" size="sm" onClick={() => autoSelect('oldest')}>Keep Oldest</Button>
+             <Button variant="secondary" size="sm" onClick={() => autoSelect('shortest')}>Keep Shortest Name</Button>
           </div>
 
-          {viewMode === 'files' && (
-            <div className="pagination">
-              <button 
-                disabled={page === 0}
-                onClick={() => setPage(p => p - 1)}
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <span>Page {page + 1}</span>
-              <button 
-                disabled={duplicates.length < limit}
-                onClick={() => setPage(p => p + 1)}
-              >
-                <ChevronRight size={16} />
-              </button>
+          <div className="flex gap-4 flex-1 justify-end">
+            <div className="relative w-64">
+              <Input 
+                placeholder="Search files..." 
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                icon={<Search size={16} />}
+              />
             </div>
-          )}
+            
+            <div className="flex items-center gap-2 bg-bg-tertiary rounded-lg px-3 border border-border-color">
+              <FilterIcon size={16} className="text-gray-400" />
+              <select 
+                value={minSize} 
+                onChange={(e) => setMinSize(Number(e.target.value))}
+                className="bg-transparent border-none text-sm text-gray-300 focus:outline-none py-2"
+              >
+                <option value={0}>Any Size</option>
+                <option value={500 * 1024}>&gt; 500 KB</option>
+                <option value={1024 * 1024}>&gt; 1 MB</option>
+                <option value={5 * 1024 * 1024}>&gt; 5 MB</option>
+                <option value={100 * 1024 * 1024}>&gt; 100 MB</option>
+              </select>
+            </div>
+
+            {viewMode === 'files' && (
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  disabled={page === 0}
+                  onClick={() => setPage(p => p - 1)}
+                >
+                  <ChevronLeft size={16} />
+                </Button>
+                <span className="text-sm text-gray-400">Page {page + 1}</span>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  disabled={duplicates.length < limit}
+                  onClick={() => setPage(p => p + 1)}
+                >
+                  <ChevronRight size={16} />
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="results-content">
-        <div className="list-view">
+      <div className="results-content flex-1 overflow-hidden flex relative">
+        <div className="list-view flex-1 overflow-y-auto p-4 space-y-4">
           {viewMode === 'files' && duplicates.map((group, idx) => (
-            <div key={idx} className="duplicate-group card glass">
-              <div className="group-header">
+            <div key={idx} className="duplicate-group card glass p-0 overflow-hidden">
+              <div className="group-header bg-bg-tertiary/50 p-3 flex justify-between items-center border-b border-border-color">
                 <span 
-                  className="hash-tag clickable" 
+                  className="text-accent-primary font-medium cursor-pointer hover:underline" 
                   onClick={() => setPreviewFiles(group)}
                   title="Click to preview all files in this group"
-                  style={{ cursor: 'pointer', textDecoration: 'underline' }}
                 >
                   Group #{page * limit + idx + 1}
                 </span>
-                <span className="size-tag">{(group[0].size / 1024 / 1024).toFixed(2)} MB</span>
+                <span className="text-xs bg-bg-primary px-2 py-1 rounded text-gray-400">
+                  {(group[0].size / 1024 / 1024).toFixed(2)} MB
+                </span>
               </div>
               {group.map((file: any) => (
                 <div 
                   key={file.id} 
-                  className={`file-row ${selectedIds.includes(file.id) ? 'selected' : ''}`}
+                  className={clsx(
+                    "file-row p-3 flex items-center gap-3 border-b border-border-color last:border-0 hover:bg-bg-tertiary/30 transition-colors cursor-pointer",
+                    selectedIds.includes(file.id) && "bg-accent-primary/10"
+                  )}
                   onClick={() => toggleSelect(file.id)}
                   onContextMenu={(e) => {
                     e.preventDefault()
                     handleShowInFolder(file.path)
                   }}
-                  title="Right-click to show in folder"
                 >
-                  <div className="checkbox">
-                    {selectedIds.includes(file.id) && <Check size={12} />}
+                  <div className={clsx(
+                    "w-5 h-5 rounded border flex items-center justify-center transition-colors",
+                    selectedIds.includes(file.id) ? "bg-accent-primary border-accent-primary" : "border-gray-600"
+                  )}>
+                    {selectedIds.includes(file.id) && <Check size={12} className="text-white" />}
                   </div>
-                  <div className="file-icon">{getIcon(file.path)}</div>
-                  <div className="file-details">
-                    <div className="file-name">{file.path.split('\\').pop()}</div>
-                    <div className="file-path">{file.path}</div>
+                  <div className="text-gray-400">{getIcon(file.path)}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-gray-200 truncate">{file.path.split('\\').pop()}</div>
+                    <div className="text-xs text-gray-500 truncate">{file.path}</div>
                   </div>
-                  <button 
-                    className="preview-btn"
+                  <Button 
+                    variant="ghost"
+                    size="sm"
+                    className="opacity-0 group-hover:opacity-100"
                     onClick={(e) => {
                       e.stopPropagation()
                       setPreviewFiles([file])
                     }}
                   >
                     <Eye size={16} />
-                  </button>
+                  </Button>
                 </div>
               ))}
             </div>
           ))}
           
           {viewMode === 'folders' && duplicateFolders.map((group, idx) => (
-            <div key={idx} className="duplicate-group card glass">
-              <div className="group-header">
-                <span className="hash-tag">Folder Group #{idx + 1}</span>
-                <span className="size-tag">{(group[0].size / 1024 / 1024).toFixed(2)} MB</span>
+            <div key={idx} className="duplicate-group card glass p-0 overflow-hidden">
+              <div className="group-header bg-bg-tertiary/50 p-3 flex justify-between items-center border-b border-border-color">
+                <span className="text-accent-secondary font-medium">Folder Group #{idx + 1}</span>
+                <span className="text-xs bg-bg-primary px-2 py-1 rounded text-gray-400">
+                  {(group[0].size / 1024 / 1024).toFixed(2)} MB
+                </span>
               </div>
               {group.map((folder: any) => (
                 <div 
                   key={folder.path} 
-                  className={`file-row ${selectedFolderPaths.includes(folder.path) ? 'selected' : ''}`}
+                  className={clsx(
+                    "file-row p-3 flex items-center gap-3 border-b border-border-color last:border-0 hover:bg-bg-tertiary/30 transition-colors cursor-pointer",
+                    selectedFolderPaths.includes(folder.path) && "bg-accent-primary/10"
+                  )}
                   onClick={() => toggleFolderSelect(folder.path)}
                   onContextMenu={(e) => {
                     e.preventDefault()
                     handleShowInFolder(folder.path)
                   }}
-                  title="Right-click to show in folder"
                 >
-                  <div className="checkbox">
-                    {selectedFolderPaths.includes(folder.path) && <Check size={12} />}
+                  <div className={clsx(
+                    "w-5 h-5 rounded border flex items-center justify-center transition-colors",
+                    selectedFolderPaths.includes(folder.path) ? "bg-accent-primary border-accent-primary" : "border-gray-600"
+                  )}>
+                    {selectedFolderPaths.includes(folder.path) && <Check size={12} className="text-white" />}
                   </div>
-                  <div className="file-icon"><Folder size={16} /></div>
-                  <div className="file-details">
-                    <div className="file-name">{folder.path.split(/[/\\]/).pop()}</div>
-                    <div className="file-path">{folder.path}</div>
-                    <div className="file-meta-small" style={{ fontSize: '0.8em', opacity: 0.7 }}>
+                  <div className="text-accent-secondary"><Folder size={16} /></div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-gray-200 truncate">{folder.path.split(/[/\\]/).pop()}</div>
+                    <div className="text-xs text-gray-500 truncate">{folder.path}</div>
+                    <div className="text-xs text-gray-600 mt-1">
                       {folder.fileCount} files
                     </div>
                   </div>
-                  <div className="row-actions" style={{ display: 'flex', gap: '5px' }}>
-                    <div className="exclude-wrapper" style={{ position: 'relative' }}>
-                        <button 
-                            className="preview-btn exclude-btn"
-                            onClick={(e) => {
-                                e.stopPropagation()
-                                const parents: string[] = []
-                                let current = folder.path
-                                while (current.length > 3) { // Stop at root (e.g. C:\)
-                                    parents.push(current)
-                                    const lastSep = Math.max(current.lastIndexOf('/'), current.lastIndexOf('\\'))
-                                    if (lastSep <= 0) break
-                                    current = current.substring(0, lastSep)
-                                }
-                                // Don't allow excluding root drives directly, but allow top level folders
-                                // The loop above stops when length <= 3, so C:\ is not added.
-                                // But we might want to verify.
-                                
-                                // Show a simple custom menu/popover
-                                // For now, let's use a simple prompt or a custom UI state
-                                // Since we can't easily add a complex popover without new components, 
-                                // let's use a state to show the exclusion menu for this specific item
-                                setExclusionMenu({ x: e.clientX, y: e.clientY, paths: parents })
-                            }}
-                            title="Exclude folder"
-                            style={{ color: '#ff6b6b' }}
-                        >
-                            <FilterIcon size={16} />
-                        </button>
-                    </div>
-                    <button 
-                        className="preview-btn"
+                  <div className="flex gap-2">
+                    <Button 
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                        onClick={(e) => {
+                            e.stopPropagation()
+                            const parents: string[] = []
+                            let current = folder.path
+                            while (current.length > 3) {
+                                parents.push(current)
+                                const lastSep = Math.max(current.lastIndexOf('/'), current.lastIndexOf('\\'))
+                                if (lastSep <= 0) break
+                                current = current.substring(0, lastSep)
+                            }
+                            setExclusionMenu({ x: e.clientX, y: e.clientY, paths: parents })
+                        }}
+                        title="Exclude folder"
+                    >
+                        <FilterIcon size={16} />
+                    </Button>
+                    <Button 
+                        variant="ghost"
+                        size="sm"
                         onClick={(e) => {
                         e.stopPropagation()
                         handleShowInFolder(folder.path)
                         }}
                     >
                         <FolderOpen size={16} />
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ))}
             </div>
           ))}
+          
           {duplicates.length === 0 && viewMode === 'files' && (
-            <div className="empty-state">
-              <h3>No duplicates found</h3>
+            <div className="flex flex-col items-center justify-center h-full text-gray-500">
+              <Search size={48} className="mb-4 opacity-20" />
+              <h3 className="text-lg font-medium">No duplicates found</h3>
               <p>Try adjusting your filters</p>
             </div>
           )}
           {duplicateFolders.length === 0 && viewMode === 'folders' && (
-            <div className="empty-state">
-              <h3>No duplicate folders found</h3>
+            <div className="flex flex-col items-center justify-center h-full text-gray-500">
+              <FolderOpen size={48} className="mb-4 opacity-20" />
+              <h3 className="text-lg font-medium">No duplicate folders found</h3>
               <p>Try adjusting your filters</p>
             </div>
           )}
@@ -474,65 +481,66 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
         <AnimatePresence>
           {previewFiles.length > 0 && (
             <motion.div 
-              className="preview-pane glass"
-              initial={{ x: 300, opacity: 0 }}
+              className="w-[400px] border-l border-border-color bg-bg-secondary/95 backdrop-blur-xl flex flex-col shadow-2xl z-20"
+              initial={{ x: 400, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
-              exit={{ x: 300, opacity: 0 }}
+              exit={{ x: 400, opacity: 0 }}
               key="preview-pane"
             >
-              <div className="preview-header">
-                <h3>Preview ({previewFiles.length})</h3>
-                <button onClick={() => setPreviewFiles([])}>×</button>
+              <div className="p-4 border-b border-border-color flex justify-between items-center">
+                <h3 className="font-semibold">Preview ({previewFiles.length})</h3>
+                <Button variant="ghost" size="sm" onClick={() => setPreviewFiles([])}>×</Button>
               </div>
-              <div className="preview-content-scroll">
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {previewFiles.map(file => (
-                  <div key={file.id} className="preview-card">
-                    <div className="preview-card-header">
-                      <button 
-                        className="action-btn-small open-file-btn"
+                  <div key={file.id} className="bg-bg-tertiary rounded-lg overflow-hidden border border-border-color">
+                    <div className="p-2 bg-black/20 flex justify-end gap-2">
+                      <Button 
+                        variant="ghost"
+                        size="sm"
                         onClick={() => handleShowInFolder(file.path)}
                         title="Show in Explorer"
+                        icon={<FolderOpen size={14} />}
                       >
-                        <FolderOpen size={14} /> Open
-                      </button>
-                      <button 
-                        className="move-bucket-btn"
+                        Open
+                      </Button>
+                      <Button 
+                        variant="destructive"
+                        size="sm"
                         onClick={async () => {
                           await onMove([file.id])
-                          // Remove from preview files
                           setPreviewFiles(prev => prev.filter(p => p.id !== file.id))
                           loadDuplicates()
                           loadStats()
                         }}
                         title="Move file"
+                        icon={<Trash2 size={14} />}
                       >
-                        <Trash2 size={14} /> Move File
-                      </button>
+                        Move
+                      </Button>
                     </div>
-                    <div className="preview-image-container">
+                    <div className="aspect-video bg-black/40 flex items-center justify-center overflow-hidden">
                       {(() => {
                         const ext = file.path.split('.').pop()?.toLowerCase()
                         
                         if (loadingPreviews.has(file.path)) {
-                          return <div className="no-preview"><p>Loading...</p></div>
+                          return <div className="text-gray-500 text-sm">Loading...</div>
                         }
 
                         const mediaUrl = `media://open?path=${encodeURIComponent(file.path)}`
 
                         if (['mp3', 'wav', 'ogg'].includes(ext || '')) {
                            return (
-                             <audio controls className="preview-media">
+                             <audio controls className="w-full">
                                <source src={mediaUrl} />
-                               Your browser does not support the audio element.
                              </audio>
                            )
                         }
 
                         if (['mp4', 'webm'].includes(ext || '')) {
                             return (
-                              <video controls className="preview-media" style={{maxWidth: '100%', maxHeight: '100%'}}>
+                              <video controls className="max-w-full max-h-full">
                                 <source src={mediaUrl} />
-                                Your browser does not support the video element.
                               </video>
                             )
                         }
@@ -541,32 +549,33 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
                             return (
                                 <iframe 
                                     src={mediaUrl} 
-                                    className="preview-media"
-                                    style={{width: '100%', height: '300px', border: 'none'}}
+                                    className="w-full h-[200px] border-none"
                                 />
                             )
                         }
                         
                         if (previewSrcs.has(file.path)) {
-                          return <img src={previewSrcs.get(file.path)} alt="Preview" />
+                          return <img src={previewSrcs.get(file.path)} alt="Preview" className="max-w-full max-h-full object-contain" />
                         }
                         
                         return (
-                          <div className="no-preview">
+                          <div className="flex flex-col items-center text-gray-500 gap-2">
                             {getIcon(file.path)}
-                            <p>
+                            <p className="text-xs">
                               {previewErrors.has(file.path) ? 'Preview failed' : 
-                               ['pptx', 'ppt'].includes(ext || '') ? 'Preview not available for slides' : 'No preview'}
+                               ['pptx', 'ppt'].includes(ext || '') ? 'No preview for slides' : 'No preview'}
                             </p>
                           </div>
                         )
                       })()}
                     </div>
-                    <div className="file-meta">
-                      <p className="file-name" title={file.path.split('\\').pop()}>{file.path.split('\\').pop()}</p>
-                      <p><strong>Location:</strong> {file.path}</p>
-                      <p><strong>Size:</strong> {(file.size / 1024 / 1024).toFixed(2)} MB</p>
-                      <p><strong>Created:</strong> {new Date(file.created_at).toLocaleDateString()}</p>
+                    <div className="p-3 text-sm space-y-1">
+                      <p className="font-medium truncate" title={file.path.split('\\').pop()}>{file.path.split('\\').pop()}</p>
+                      <p className="text-gray-500 text-xs truncate" title={file.path}>{file.path}</p>
+                      <div className="flex justify-between text-xs text-gray-400 mt-2">
+                        <span>{(file.size / 1024 / 1024).toFixed(2)} MB</span>
+                        <span>{new Date(file.created_at).toLocaleDateString()}</span>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -578,70 +587,43 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
       <AnimatePresence>
         {exclusionMenu && (
             <div 
-                className="exclusion-menu"
+                className="fixed bg-bg-secondary border border-border-color rounded-lg shadow-xl z-50 min-w-[200px] overflow-hidden"
                 style={{
-                    position: 'fixed',
                     top: exclusionMenu.y,
                     left: exclusionMenu.x > window.innerWidth / 2 ? 'auto' : exclusionMenu.x,
                     right: exclusionMenu.x > window.innerWidth / 2 ? window.innerWidth - exclusionMenu.x : 'auto',
-                    background: '#1a1a1a',
-                    border: '1px solid #333',
-                    borderRadius: '8px',
-                    padding: '8px',
-                    zIndex: 1000,
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '4px',
-                    minWidth: '200px'
                 }}
             >
-                <div style={{ padding: '4px 8px', fontSize: '0.8em', color: '#888', borderBottom: '1px solid #333', marginBottom: '4px' }}>
+                <div className="px-3 py-2 text-xs text-gray-500 border-b border-border-color bg-bg-tertiary/50">
                     Exclude Folder
                 </div>
-                {exclusionMenu.paths.map(path => (
-                    <button
-                        key={path}
-                        onClick={() => handleExclude(path)}
-                        style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: '#eee',
-                            textAlign: 'left',
-                            padding: '6px 8px',
-                            cursor: 'pointer',
-                            borderRadius: '4px',
-                            fontSize: '0.9em',
-                            transition: 'background 0.2s'
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.background = '#333'}
-                        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                    >
-                        {path}
-                    </button>
-                ))}
-                <button
-                    onClick={() => setExclusionMenu(null)}
-                    style={{
-                        marginTop: '4px',
-                        background: '#333',
-                        border: 'none',
-                        color: '#aaa',
-                        padding: '4px',
-                        cursor: 'pointer',
-                        borderRadius: '4px',
-                        fontSize: '0.8em'
-                    }}
-                >
-                    Cancel
-                </button>
+                <div className="p-1">
+                  {exclusionMenu.paths.map(path => (
+                      <button
+                          key={path}
+                          onClick={() => handleExclude(path)}
+                          className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-accent-primary/10 hover:text-white rounded transition-colors truncate"
+                          title={path}
+                      >
+                          {path}
+                      </button>
+                  ))}
+                </div>
+                <div className="p-1 border-t border-border-color">
+                  <button
+                      onClick={() => setExclusionMenu(null)}
+                      className="w-full text-left px-3 py-2 text-xs text-gray-500 hover:bg-bg-tertiary rounded transition-colors"
+                  >
+                      Cancel
+                  </button>
+                </div>
             </div>
         )}
       </AnimatePresence>
       {/* Click outside to close menu */}
       {exclusionMenu && (
         <div 
-            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999 }}
+            className="fixed inset-0 z-40"
             onClick={() => setExclusionMenu(null)}
         />
       )}

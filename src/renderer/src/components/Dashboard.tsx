@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { HardDrive, Music, Video, Image, FileText, Play } from 'lucide-react'
+import { HardDrive, Music, Video, Image, FileText, Play, RefreshCw } from 'lucide-react'
+import { Button } from './ui/Button'
+import clsx from 'clsx'
 
 interface DashboardProps {
   onStartScan: (options: any) => void
@@ -49,8 +51,9 @@ export default function Dashboard({ onStartScan }: DashboardProps): JSX.Element 
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
     >
-      <header className="hero">
+      <header className="hero text-center mb-12 mt-8">
         <motion.h1
+          className="text-5xl font-bold mb-4 text-gradient"
           initial={{ y: -50, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.2 }}
@@ -58,6 +61,7 @@ export default function Dashboard({ onStartScan }: DashboardProps): JSX.Element 
           Duplicatizerarator
         </motion.h1>
         <motion.p
+          className="text-xl text-gray-400"
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.3 }}
@@ -78,7 +82,7 @@ export default function Dashboard({ onStartScan }: DashboardProps): JSX.Element 
             {drives.map((drive) => (
               <div 
                 key={drive.path} 
-                className={`drive-item ${selectedDrives.includes(drive.path) ? 'selected' : ''}`}
+                className={clsx('drive-item', selectedDrives.includes(drive.path) && 'selected')}
                 onClick={() => toggleDrive(drive.path)}
               >
                 <div className="drive-icon">💾</div>
@@ -100,62 +104,50 @@ export default function Dashboard({ onStartScan }: DashboardProps): JSX.Element 
         >
           <h3>Scan For</h3>
           <div className="type-grid">
-            <div 
-              className={`type-item ${fileTypes.includes('photos') ? 'selected' : ''}`}
-              onClick={() => toggleType('photos')}
-            >
-              <Image size={24} />
-              <span>Photos</span>
-            </div>
-            <div 
-              className={`type-item ${fileTypes.includes('music') ? 'selected' : ''}`}
-              onClick={() => toggleType('music')}
-            >
-              <Music size={24} />
-              <span>Music</span>
-            </div>
-            <div 
-              className={`type-item ${fileTypes.includes('videos') ? 'selected' : ''}`}
-              onClick={() => toggleType('videos')}
-            >
-              <Video size={24} />
-              <span>Videos</span>
-            </div>
-            <div 
-              className={`type-item ${fileTypes.includes('documents') ? 'selected' : ''}`}
-              onClick={() => toggleType('documents')}
-            >
-              <FileText size={24} />
-              <span>Docs</span>
-            </div>
+            {[
+              { id: 'photos', icon: <Image size={24} />, label: 'Photos' },
+              { id: 'music', icon: <Music size={24} />, label: 'Music' },
+              { id: 'videos', icon: <Video size={24} />, label: 'Videos' },
+              { id: 'documents', icon: <FileText size={24} />, label: 'Docs' }
+            ].map((type) => (
+              <div 
+                key={type.id}
+                className={clsx('type-item', fileTypes.includes(type.id) && 'selected')}
+                onClick={() => toggleType(type.id)}
+              >
+                {type.icon}
+                <span>{type.label}</span>
+              </div>
+            ))}
           </div>
         </motion.div>
       </div>
 
       <motion.div 
-        className="action-area"
+        className="action-area flex flex-col items-center gap-6"
         initial={{ y: 50, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.6 }}
       >
-        <div className="scan-options">
-          <label className="checkbox-container">
-            <input 
-              type="checkbox" 
-              checked={forceRefresh} 
-              onChange={(e) => setForceRefresh(e.target.checked)} 
-            />
-            <span className="checkmark"></span>
-            Force Refresh Index
-          </label>
+        <div 
+          className="flex items-center gap-3 cursor-pointer text-gray-400 hover:text-white transition-colors"
+          onClick={() => setForceRefresh(!forceRefresh)}
+        >
+          <div className={clsx("w-5 h-5 border-2 rounded flex items-center justify-center transition-colors", forceRefresh ? "border-accent-primary bg-accent-primary" : "border-gray-600")}>
+            {forceRefresh && <RefreshCw size={12} className="text-white" />}
+          </div>
+          <span>Force Refresh Index</span>
         </div>
-        <button 
-          className="scan-btn" 
+
+        <Button 
+          variant="primary" 
           onClick={handleScan}
           disabled={selectedDrives.length === 0}
+          className="px-12 py-4 text-lg rounded-full shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all"
+          icon={<Play fill="currentColor" />}
         >
-          <Play fill="currentColor" /> START SCAN
-        </button>
+          START SCAN
+        </Button>
       </motion.div>
     </motion.div>
   )
