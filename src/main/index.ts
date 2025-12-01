@@ -1,15 +1,3 @@
-import { app, shell, BrowserWindow, ipcMain, protocol, nativeImage } from 'electron'
-import { join } from 'path'
-import { existsSync, readFileSync } from 'fs'
-import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-// @ts-ignore
-import icon from '../../resources/icon.png?asset'
-import { initDatabase, getDuplicates, getDuplicateFolders } from './database'
-import { scanFiles, cancelScan } from './scanner'
-import { processDuplicates } from './processor'
-import { getDrives } from './utils'
-import { moveFiles, restoreFiles, getHistory } from './actions'
-import { logger } from './logger'
 
 function createWindow(): void {
   // Create the browser window.
@@ -154,6 +142,10 @@ ipcMain.handle('get-duplicate-folders', () => {
   return getDuplicateFolders()
 })
 
+ipcMain.handle('get-duplicate-stats', () => {
+  return getDuplicateStats()
+})
+
 ipcMain.handle('move-files', async (_event, fileIds) => {
   await moveFiles(fileIds)
   return { success: true }
@@ -204,6 +196,35 @@ ipcMain.handle('get-file-preview', async (_event, path) => {
   } catch (error: any) {
     logger.error('[Main] Failed to load preview:', error.message)
     return null
+  }
+})
+
+ipcMain.handle('add-excluded-folder', async (_event, path) => {
+  logger.info('[Main] Adding excluded folder:', path)
+  try {
+    // 1. Add to DB
+    addExcludedFolder(path)
+    // 2. Remove existing files from DB
+    removeFilesByPrefix(path)
+    return { success: true }
+  } catch (error: any) {
+    logger.error('[Main] Failed to add excluded folder:', error)
+    return { success: false, error: error.message }
+  }
+})
+
+ipcMain.handle('get-excluded-folders', async () => {
+  return getExcludedFolders()
+})
+
+ipcMain.handle('remove-excluded-folder', async (_event, path) => {
+  logger.info('[Main] Removing excluded folder:', path)
+  try {
+    removeExcludedFolder(path)
+    return { success: true }
+  } catch (error: any) {
+    logger.error('[Main] Failed to remove excluded folder:', error)
+    return { success: false, error: error.message }
   }
 })
 

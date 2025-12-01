@@ -15,12 +15,25 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [selectedFolderPaths, setSelectedFolderPaths] = useState<string[]>([])
   const [previewFiles, setPreviewFiles] = useState<any[]>([])
+  const [stats, setStats] = useState<{ totalFiles: number, originalFiles: number, duplicateFolders: number } | null>(null)
   
   // Filter States
   const [search, setSearch] = useState('')
   const [minSize, setMinSize] = useState(0)
   const [page, setPage] = useState(0)
   const limit = 20
+
+  const [exclusionMenu, setExclusionMenu] = useState<{ x: number, y: number, paths: string[] } | null>(null)
+
+  const handleExclude = async (path: string) => {
+    await window.api.addExcludedFolder(path)
+    setExclusionMenu(null)
+    // Reload both views
+    // Reload both views
+    loadDuplicates()
+    loadDuplicateFolders()
+    loadStats()
+  }
 
   const loadDuplicates = async () => {
     const dups = await window.api.getDuplicates({
@@ -55,6 +68,11 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
     setDuplicateFolders(folders)
   }
 
+  const loadStats = async () => {
+    const s = await window.api.getDuplicateStats()
+    setStats(s)
+  }
+
   useEffect(() => {
     if (viewMode === 'files') {
       const timer = setTimeout(() => {
@@ -65,6 +83,7 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
     } else {
       loadDuplicateFolders()
     }
+    loadStats()
   }, [search, minSize, viewMode])
 
   useEffect(() => {
@@ -96,6 +115,7 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
       if (selectedIds.length === 0) return
       await onMove(selectedIds)
       loadDuplicates()
+      loadStats()
       setSelectedIds([])
     } else {
       if (selectedFolderPaths.length === 0) return
@@ -115,6 +135,7 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
       if (idsToDelete.length > 0) {
         await onMove(idsToDelete)
         loadDuplicateFolders()
+        loadStats()
         setSelectedFolderPaths([])
       }
     }
@@ -230,7 +251,14 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
     >
       <div className="results-header">
         <div className="header-top">
-          <h2>Duplicates Found</h2>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <h2>Duplicates Found</h2>
+            {stats && (
+              <div style={{ fontSize: '0.8em', opacity: 0.7, marginTop: '-5px' }}>
+                {stats.originalFiles} originals : {stats.totalFiles} total files | {stats.duplicateFolders} duplicate folders
+              </div>
+            )}
+          </div>
           <div className="view-toggle" style={{ marginLeft: '20px', display: 'flex', gap: '5px', background: 'rgba(255,255,255,0.1)', padding: '4px', borderRadius: '8px' }}>
             <button 
               className={`toggle-btn ${viewMode === 'files' ? 'active' : ''}`}
@@ -385,15 +413,46 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
                       {folder.fileCount} files
                     </div>
                   </div>
-                  <button 
-                    className="preview-btn"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleShowInFolder(folder.path)
-                    }}
-                  >
-                    <FolderOpen size={16} />
-                  </button>
+                  <div className="row-actions" style={{ display: 'flex', gap: '5px' }}>
+                    <div className="exclude-wrapper" style={{ position: 'relative' }}>
+                        <button 
+                            className="preview-btn exclude-btn"
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                const parents: string[] = []
+                                let current = folder.path
+                                while (current.length > 3) { // Stop at root (e.g. C:\)
+                                    parents.push(current)
+                                    const lastSep = Math.max(current.lastIndexOf('/'), current.lastIndexOf('\\'))
+                                    if (lastSep <= 0) break
+                                    current = current.substring(0, lastSep)
+                                }
+                                // Don't allow excluding root drives directly, but allow top level folders
+                                // The loop above stops when length <= 3, so C:\ is not added.
+                                // But we might want to verify.
+                                
+                                // Show a simple custom menu/popover
+                                // For now, let's use a simple prompt or a custom UI state
+                                // Since we can't easily add a complex popover without new components, 
+                                // let's use a state to show the exclusion menu for this specific item
+                                setExclusionMenu({ x: e.clientX, y: e.clientY, paths: parents })
+                            }}
+                            title="Exclude folder"
+                            style={{ color: '#ff6b6b' }}
+                        >
+                            <FilterIcon size={16} />
+                        </button>
+                    </div>
+                    <button 
+                        className="preview-btn"
+                        onClick={(e) => {
+                        e.stopPropagation()
+                        handleShowInFolder(folder.path)
+                        }}
+                    >
+                        <FolderOpen size={16} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -443,6 +502,7 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
                           // Remove from preview files
                           setPreviewFiles(prev => prev.filter(p => p.id !== file.id))
                           loadDuplicates()
+                          loadStats()
                         }}
                         title="Move file"
                       >
@@ -515,6 +575,76 @@ export default function Results({ onMove }: ResultsProps): JSX.Element {
           )}
         </AnimatePresence>
       </div>
+      <AnimatePresence>
+        {exclusionMenu && (
+            <div 
+                className="exclusion-menu"
+                style={{
+                    position: 'fixed',
+                    top: exclusionMenu.y,
+                    left: exclusionMenu.x > window.innerWidth / 2 ? 'auto' : exclusionMenu.x,
+                    right: exclusionMenu.x > window.innerWidth / 2 ? window.innerWidth - exclusionMenu.x : 'auto',
+                    background: '#1a1a1a',
+                    border: '1px solid #333',
+                    borderRadius: '8px',
+                    padding: '8px',
+                    zIndex: 1000,
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px',
+                    minWidth: '200px'
+                }}
+            >
+                <div style={{ padding: '4px 8px', fontSize: '0.8em', color: '#888', borderBottom: '1px solid #333', marginBottom: '4px' }}>
+                    Exclude Folder
+                </div>
+                {exclusionMenu.paths.map(path => (
+                    <button
+                        key={path}
+                        onClick={() => handleExclude(path)}
+                        style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#eee',
+                            textAlign: 'left',
+                            padding: '6px 8px',
+                            cursor: 'pointer',
+                            borderRadius: '4px',
+                            fontSize: '0.9em',
+                            transition: 'background 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#333'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                    >
+                        {path}
+                    </button>
+                ))}
+                <button
+                    onClick={() => setExclusionMenu(null)}
+                    style={{
+                        marginTop: '4px',
+                        background: '#333',
+                        border: 'none',
+                        color: '#aaa',
+                        padding: '4px',
+                        cursor: 'pointer',
+                        borderRadius: '4px',
+                        fontSize: '0.8em'
+                    }}
+                >
+                    Cancel
+                </button>
+            </div>
+        )}
+      </AnimatePresence>
+      {/* Click outside to close menu */}
+      {exclusionMenu && (
+        <div 
+            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999 }}
+            onClick={() => setExclusionMenu(null)}
+        />
+      )}
     </motion.div>
   )
 }

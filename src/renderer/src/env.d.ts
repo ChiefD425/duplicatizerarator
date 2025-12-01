@@ -11,6 +11,9 @@ interface Window {
     restoreFiles: (historyIds: number[]) => Promise<any>
     showItemInFolder: (path: string) => Promise<any>
     getFilePreview: (path: string) => Promise<string | null>
+    addExcludedFolder: (path: string) => Promise<{ success: boolean; error?: string }>
+    removeExcludedFolder: (path: string) => Promise<{ success: boolean; error?: string }>
+    getExcludedFolders: () => Promise<string[]>
     cancelScan: () => Promise<{ success: boolean }>
     onScanProgress: (callback: (event: any, value: any) => void) => void
     onScanComplete: (callback: (event: any, value: any) => void) => void

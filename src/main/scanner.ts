@@ -1,6 +1,6 @@
 import { readdir, stat } from 'fs/promises'
 import { join, extname } from 'path'
-import { upsertFilesBatch, clearFiles, getAllFilesMap, deleteFiles } from './database'
+import { upsertFilesBatch, clearFiles, getAllFilesMap, deleteFiles, getExcludedFolders } from './database'
 import { BrowserWindow } from 'electron'
 import { logger } from './logger'
 import { FileEntry } from './fileEntry'
@@ -51,6 +51,9 @@ export async function scanFiles(options: ScanOptions, mainWindow: BrowserWindow)
   const existingFiles = options.forceRefresh ? new Map() : getAllFilesMap()
   const seenPaths = new Set<string>()
 
+  // Load excluded folders
+  const excludedFolders = getExcludedFolders()
+
   const allowedExtensions = new Set<string>()
   if (options.types.length > 0) {
     options.types.forEach(type => {
@@ -81,12 +84,22 @@ export async function scanFiles(options: ScanOptions, mainWindow: BrowserWindow)
     const dir = queue.shift()!
     
     try {
+        // Check dynamic exclusions
+        if (excludedFolders.some(ex => dir.startsWith(ex))) continue
+
+        // Check for dot folders (hidden folders)
+        const dirName = dir.split(/[/\\]/).pop()
+        if (dirName && dirName.startsWith('.') && dirName !== '.') continue
+
         const dirents = await readdir(dir, { withFileTypes: true })
         for (const dirent of dirents) {
             const path = join(dir, dirent.name)
             
             if (options.ignoreSystem && DEFAULT_EXCLUSIONS.some(ex => path.toLowerCase().includes(ex.toLowerCase()))) continue
             
+            // Check dynamic exclusions for files/subfolders
+            if (excludedFolders.some(ex => path.startsWith(ex))) continue
+
             if (dirent.isDirectory()) {
                 queue.push(path)
             } else if (dirent.isFile()) {

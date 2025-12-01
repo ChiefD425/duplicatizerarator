@@ -38,6 +38,12 @@ export function initDatabase(): void {
       timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     
+    CREATE TABLE IF NOT EXISTS excluded_folders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      path TEXT NOT NULL UNIQUE,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    
     CREATE INDEX IF NOT EXISTS idx_files_full_hash ON files(full_hash);
     CREATE INDEX IF NOT EXISTS idx_files_partial_hash ON files(partial_hash);
     CREATE INDEX IF NOT EXISTS idx_files_size ON files(size);
@@ -100,6 +106,36 @@ export function deleteFiles(paths: string[]): void {
   if (paths.length === 0) return
   const placeholders = paths.map(() => '?').join(',')
   db.prepare(`DELETE FROM files WHERE path IN (${placeholders})`).run(...paths)
+}
+
+export function addExcludedFolder(path: string): void {
+  db.prepare('INSERT OR IGNORE INTO excluded_folders (path) VALUES (?)').run(path)
+}
+
+export function getExcludedFolders(): string[] {
+  return db.prepare('SELECT path FROM excluded_folders').all().map((row: any) => row.path)
+}
+
+export function removeExcludedFolder(path: string): void {
+  db.prepare('DELETE FROM excluded_folders WHERE path = ?').run(path)
+}
+
+export function removeFilesByPrefix(folderPath: string): void {
+  // SQLite LIKE is case-insensitive by default for ASCII characters, but we should be careful with paths
+  // We want to delete files that start with the folder path
+  // Ensure folderPath ends with a separator to avoid partial matches (e.g. excluding /tmp should not exclude /tmp2)
+  // But wait, if we exclude c:\AMD, we want c:\AMD\foo. So we just check if path starts with folderPath + separator OR path IS folderPath
+  
+  // Actually, for simplicity and performance, let's just use LIKE with %
+  // We need to be careful about the separator.
+  // Ideally we normalize paths, but here we assume paths are consistent.
+  
+  // Let's just use a simple LIKE query.
+  // Note: Windows paths might use backslashes.
+  
+  db.prepare('DELETE FROM files WHERE path LIKE ? OR path = ?').run(`${folderPath}\\%`, folderPath)
+  // Also handle forward slashes just in case
+  db.prepare('DELETE FROM files WHERE path LIKE ? OR path = ?').run(`${folderPath}/%`, folderPath)
 }
 
 export function getDuplicates(options: { 
@@ -220,6 +256,38 @@ export function getDuplicateFolders(): any[] {
   
   console.log(`[Database] Found ${result.length} duplicate folder groups.`)
   return result
+}
+
+export function getDuplicateStats(): { totalFiles: number, originalFiles: number, duplicateFolders: number } {
+  // 1. Get total files involved in duplicates
+  const totalFilesResult = db.prepare(`
+    SELECT COUNT(*) as count FROM files 
+    WHERE full_hash IN (
+      SELECT full_hash FROM files 
+      WHERE full_hash IS NOT NULL 
+      GROUP BY full_hash 
+      HAVING COUNT(*) > 1
+    )
+  `).get() as { count: number }
+
+  // 2. Get number of original files (unique hashes)
+  const originalFilesResult = db.prepare(`
+    SELECT COUNT(DISTINCT full_hash) as count FROM files 
+    WHERE full_hash IS NOT NULL 
+    GROUP BY full_hash 
+    HAVING COUNT(*) > 1
+  `).all() // We need to count the rows returned by GROUP BY
+
+  // 3. Get duplicate folders count
+  // This is a bit expensive to calculate fully every time, but let's try to reuse the logic or simplify
+  // For now, let's call the existing function as it's the source of truth
+  const folders = getDuplicateFolders()
+  
+  return {
+    totalFiles: totalFilesResult.count,
+    originalFiles: originalFilesResult.length,
+    duplicateFolders: folders.length
+  }
 }
 
 export default db
