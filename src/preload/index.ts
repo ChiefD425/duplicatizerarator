@@ -6,6 +6,7 @@ const api = {
   getDrives: () => ipcRenderer.invoke('get-drives'),
   startScan: (options: any) => ipcRenderer.invoke('start-scan', options),
   getDuplicates: (options?: any) => ipcRenderer.invoke('get-duplicates', options),
+  getDuplicateFolders: () => ipcRenderer.invoke('get-duplicate-folders'),
   moveFiles: (fileIds: number[]) => ipcRenderer.invoke('move-files', fileIds),
   getHistory: () => ipcRenderer.invoke('get-history'),
   restoreFiles: (historyIds: number[]) => ipcRenderer.invoke('restore-files', historyIds),
